@@ -22,8 +22,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 ├── src/                # source code (read-only)
 ├── docs/               # design docs, PDFs (read-only)
 ├── meetings/           # meeting notes (read-only)
-└── .wiki/
-    ├── SKILL.md        # this file
+└── .wiki/              # wiki content (created by this skill)
     ├── _root.md        # the one fixed entry point
     ├── cards/          # all cards, flat
     │   ├── auth-jwt-flow.md
@@ -34,6 +33,8 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
         ├── orphans.md  # cards nobody links to
         └── stale.md    # cards whose source has changed since
 ```
+
+This skill itself is installed at `.claude/skills/project-wiki/SKILL.md` (Claude Code auto-loads it from there). It operates on the `.wiki/` folder shown above.
 
 ## Card format
 
