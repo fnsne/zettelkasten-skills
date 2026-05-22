@@ -23,7 +23,7 @@ Drop this skill into the project where you want the wiki:
 ```bash
 # From your project root
 mkdir -p .claude/skills
-git clone https://github.com/<your-user>/zettelkasten-skills.git .claude/skills/zettelkasten-skills
+git clone https://github.com/fnsne/zettelkasten-skills.git .claude/skills/zettelkasten-skills
 ```
 
 Or copy just the skill directory:
@@ -38,7 +38,7 @@ cp -r /path/to/zettelkasten-skills/.claude/skills/project-wiki/* .claude/skills/
 Install once under `~/.claude/skills/`:
 
 ```bash
-git clone https://github.com/<your-user>/zettelkasten-skills.git ~/.claude/skills/zettelkasten-skills
+git clone https://github.com/fnsne/zettelkasten-skills.git ~/.claude/skills/zettelkasten-skills
 ```
 
 ### Script dependencies
