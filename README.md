@@ -16,29 +16,47 @@ The wiki is designed to be **read primarily by Claude** to answer your project q
 
 ## Installation
 
+Claude Code discovers skills at `<root>/.claude/skills/<skill-name>/SKILL.md`. The actual skill folder you need is `project-wiki/` inside this repo's `.claude/skills/` — so the install commands below clone into a temp directory, copy that single folder to the right place, then clean up.
+
 ### Project-level (recommended)
 
 Drop this skill into the project where you want the wiki:
 
 ```bash
 # From your project root
-mkdir -p .claude/skills
-git clone https://github.com/fnsne/zettelkasten-skills.git .claude/skills/zettelkasten-skills
+tmp=$(mktemp -d) && \
+  git clone --depth 1 https://github.com/fnsne/zettelkasten-skills.git "$tmp" && \
+  mkdir -p .claude/skills && \
+  cp -r "$tmp/.claude/skills/project-wiki" .claude/skills/ && \
+  rm -rf "$tmp"
 ```
 
-Or copy just the skill directory:
-
-```bash
-mkdir -p .claude/skills/project-wiki
-cp -r /path/to/zettelkasten-skills/.claude/skills/project-wiki/* .claude/skills/project-wiki/
-```
+Result: `.claude/skills/project-wiki/SKILL.md`
 
 ### Global (across all projects)
 
 Install once under `~/.claude/skills/`:
 
 ```bash
-git clone https://github.com/fnsne/zettelkasten-skills.git ~/.claude/skills/zettelkasten-skills
+tmp=$(mktemp -d) && \
+  git clone --depth 1 https://github.com/fnsne/zettelkasten-skills.git "$tmp" && \
+  mkdir -p ~/.claude/skills && \
+  cp -r "$tmp/.claude/skills/project-wiki" ~/.claude/skills/ && \
+  rm -rf "$tmp"
+```
+
+Result: `~/.claude/skills/project-wiki/SKILL.md`
+
+### Already have the repo cloned?
+
+```bash
+# Project-level
+mkdir -p .claude/skills
+cp -r /path/to/zettelkasten-skills/.claude/skills/project-wiki .claude/skills/
+
+# Global
+mkdir -p ~/.claude/skills
+cp -r /path/to/zettelkasten-skills/.claude/skills/project-wiki ~/.claude/skills/
 ```
 
 ### Script dependencies
