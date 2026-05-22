@@ -227,27 +227,27 @@ Steps:
    - Is this a completely new branch? → flag that a new hub may be needed (suggest `promote` later).
    - **Does any neighbor card contradict this candidate?** Read the neighbor's prose and ask "do these make opposing claims about the same question?" If yes, flag as `[CONFLICT?]` in step 4. Be conservative — different framings of the same fact are not conflicts; different conclusions on the same question are.
    - **Does the candidate's content rest on premises** (language like "選 X 而非 Y" / "採 X 策略" / "X 比 Y 好" / "前提是…")? If yes, propose adding a `## 前提與局限` section as `[SECTION?]` in step 4. This is a content cue — the card itself still has no `type:`.
-4. **Present a proposal** to the user, like:
+4. **Present a proposal** to the user. Prefix every item with `[1]`, `[2]`, ... so the user can reference them by number (see "Numbered proposal items" in Operating conventions):
    ```
    From src/auth/jwt.ts I propose:
-     [NEW] auth-jwt-flow      → will link to: auth-overview, decision-jwt-vs-session
-     [NEW] auth-refresh-token → will link to: auth-jwt-flow, security-token-rotation
-     [EXPAND] auth-overview   → add subsection mentioning the new cards
-     [UPDATE] _root.md        → no change (auth-overview already linked)
+     [1] [NEW] auth-jwt-flow      → will link to: auth-overview, decision-jwt-vs-session
+     [2] [NEW] auth-refresh-token → will link to: auth-jwt-flow, security-token-rotation
+     [3] [EXPAND] auth-overview   → add subsection mentioning the new cards
+     [4] [UPDATE] _root.md        → no change (auth-overview already linked)
 
-     [SECTION?] decision-jwt-vs-session → propose adding ## 前提與局限
-       draft: "本決策前提是 token 生命週期 < 1hr。若改長期 token,
-              需重評 revocation 機制。"
+     [5] [SECTION?] decision-jwt-vs-session → propose adding ## 前提與局限
+         draft: "本決策前提是 token 生命週期 < 1hr。若改長期 token,
+                需重評 revocation 機制。"
 
-     [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
-       新卡: "JWT 適合所有 stateless 場景"
-       舊卡: "JWT 僅限低敏感場景,因 revocation 缺陷"
-       (m) mark    — 兩張卡 frontmatter 互加 conflicts:,原文不動
-       (r) resolve — 現在處理,會再問您要改哪一邊 / 合併 / 重寫
-       (n) not really — 不算衝突,別標
-       (s) skip    — 跳過,extract 繼續
+     [6] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
+         新卡: "JWT 適合所有 stateless 場景"
+         舊卡: "JWT 僅限低敏感場景,因 revocation 缺陷"
+         (m) mark    — 兩張卡 frontmatter 互加 conflicts:,原文不動
+         (r) resolve — 現在處理,會再問您要改哪一邊 / 合併 / 重寫
+         (n) not really — 不算衝突,別標
+         (s) skip    — 跳過,extract 繼續
 
-   Confirm? (y / edit <id> / skip <id>)
+   Confirm? (y / edit <n> / skip <n>)
    ```
 5. On confirmation, write the cards. Each new card must include:
    - Definition sentence as the first line of `## 摘要`
@@ -327,6 +327,7 @@ Checks performed by the script:
 - **Source references**: always include exact lines (for code) or pages (for PDFs). `src/foo.ts:42-58`, `docs/spec.pdf` p.4-6.
 - **Inline links**: standard CommonMark format `[display text](./other-card.md)`. Use `./` for same-folder cards; `../ref/...` and `../_root.md` for cross-folder. Display text should be the natural prose noun phrase, not the id.
 - **No deletions without confirmation**. Even orphan cards stay until the user explicitly says delete. `ref/` items are never deleted by the skill.
+- **Numbered proposal items**. Whenever a workflow presents two or more proposed changes for the user to confirm / edit / skip, prefix each item with `[1]`, `[2]`, `[3]`, ... so the user can reference them by number (`edit 2`, `skip 3`). Apply this even when items already have card-ids — the user shouldn't have to retype a long id like `decision-jwt-vs-session`. Numbers are local to one proposal; if some items are accepted and you re-propose the rest, renumber from 1.
 
 ## When to refuse or defer
 
