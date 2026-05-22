@@ -13,7 +13,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 2. **One concept per card.** The test: can you use the card's title as a noun phrase in another card's prose? If not, split it.
 3. **Sources are read-only.** Cards link back to source via `sources:` frontmatter. Never edit source files. If source changes, mark the card stale in `_meta/stale.md`.
 4. **Two link layers.** `frontmatter.links` is the machine-readable index (list of card ids). Inline standard markdown links `[display text](./other-card.md)` form the narrative — the wiki reads like Wikipedia, not like a directory.
-5. **Semi-automatic.** Every extract / link / promote action proposes changes and waits for user confirmation. Never silently mass-edit cards.
+5. **Semi-automatic.** Every extract / promote action proposes changes and waits for user confirmation. Never silently mass-edit cards.
 
 ## Directory layout
 
@@ -112,7 +112,7 @@ payload 的 stateless token。根據[當初的決策](./decision-jwt-vs-session.
 
 | Layer | Where | Purpose | Audience |
 |---|---|---|---|
-| `frontmatter.links` | YAML (list of card ids) | Machine-readable index; used by `audit` and `link` workflows; powers backlinks | Tooling |
+| `frontmatter.links` | YAML (list of card ids) | Machine-readable index; used by `audit` and by `extract`'s `[LINK]` items; powers backlinks | Tooling |
 | Inline `[text](./other-card.md)` | Within prose | The card reads as continuous narrative, with concepts linking to their definitions; clickable in any markdown viewer | Humans + Claude reading the card |
 | "何時往下追" section | End of card | Explicit navigation hints — "for X go to Y" | Claude during query-time traversal |
 
@@ -199,7 +199,7 @@ Mechanical, deterministic operations live in Python scripts under `.claude/skill
 
 ## Workflows
 
-The skill has five workflows. Always announce which one is running, and always run them semi-automatically (propose → confirm → write).
+The skill has four workflows. Always announce which one is running, and always run them semi-automatically (propose → confirm → write). Link maintenance is **not** a separate workflow — it's folded into `extract` as `[LINK]` items and surfaced by `audit` as missing-link findings.
 
 ### Workflow 1: `query` — answer a question using the wiki
 
@@ -231,15 +231,32 @@ Steps:
    - **Contradicts a neighbor card?** Read the neighbor's prose and ask "do these make opposing claims about the same question?" Be conservative — different framings ≠ conflict; different conclusions on the same question = conflict. If yes, plan a `[CONFLICT?]` item.
    - **Rests on premises?** (language like "選 X 而非 Y" / "採 X 策略" / "前提是…") → plan a `[SECTION?]` item adding `## 前提與局限`.
 
-3. **Show the map.** List all planned items with title + intent only, in **dependency order** (cards a hub will link to come before the hub; `[CONFLICT?]` / `[SECTION?]` after the cards they touch; `_root.md` last). Per the "Numbered proposal items" convention, prefix each with `[1]`, `[2]`, ...
+   Then enumerate **`[LINK]` items** — every existing card that needs a back-link or a newly-discovered link, surfaced as its own walkthrough item so the user sees explicitly what will change in each affected card:
+   - **Back-link of a `[NEW]` card**: for each card B listed in a new card A's `links:`, plan a `[LINK]` item updating B (add A to B's frontmatter `links:`, and where natural, weave an inline mention of A in B's prose). Exception: if B is *already* being modified by another item this batch (e.g., `[EXPAND] B`), fold the back-link into that item — don't create a redundant `[LINK]`.
+   - **Missing link between existing cards**: if during the scan you notice that existing card X mentions a concept covered by another existing card Y but isn't linked to it, plan a `[LINK]` item X → Y. This is how plain link-maintenance happens — there is no separate `link` workflow.
+   - One `[LINK]` item = one direction of a connection. Don't fold bidirectional changes into one item; each direction gets its own line so the user can accept/skip independently.
+
+3. **Show the map.** List all planned items with title + intent only, in **dependency order**:
+   - `[NEW]` cards first (so any `[LINK]` referencing them runs against real files)
+   - `[LINK]` items grouped immediately after the item that motivated them (a `[NEW]`'s back-links, an existing missing-link)
+   - `[EXPAND]` for hubs after the cards they list
+   - `[SECTION?]` / `[CONFLICT?]` after the cards they touch
+   - `[UPDATE] _root.md` last
+
+   Per the "Numbered proposal items" convention, prefix each with `[1]`, `[2]`, ...
+
    ```
-   From src/auth/jwt.ts I propose 6 changes — going through them one at a time:
+   From src/auth/jwt.ts I propose 8 changes — going through them one at a time:
+
      [1] [NEW]       auth-jwt-flow
-     [2] [NEW]       auth-refresh-token
-     [3] [EXPAND]    auth-overview — add sub-cards to 子題導覽
-     [4] [SECTION?]  decision-jwt-vs-session — add 前提與局限
-     [5] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
-     [6] [UPDATE]    _root.md (no change — auth-overview already linked)
+     [2] [LINK]      decision-jwt-vs-session ← auth-jwt-flow   (back-link of [1])
+     [3] [NEW]       auth-refresh-token
+     [4] [EXPAND]    auth-overview — add new sub-cards to 子題導覽
+                       (this item also carries the back-links from [1] and [3])
+     [5] [LINK]      security-overview → user-session-model   (missing link found during scan)
+     [6] [SECTION?]  decision-jwt-vs-session — add 前提與局限
+     [7] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
+     [8] [UPDATE]    _root.md (no change — auth-overview already linked)
 
    Proceed? (回 y 開始；要調整提案內容或跳過幾項，講一下即可)
    ```
@@ -256,7 +273,7 @@ Steps:
 
    **`[NEW]`** — show the complete draft card (frontmatter + body):
    ```
-   [1/6] [NEW] auth-jwt-flow
+   [1/8] [NEW] auth-jwt-flow
 
    ---
    id: auth-jwt-flow
@@ -280,9 +297,27 @@ Steps:
    這張卡片如何？
    ```
 
-   **`[EXPAND]`** — show the diff and where it lands:
+   **`[LINK]`** — show what the affected card will gain (frontmatter line + optional inline diff). Used both for back-links of `[NEW]` items and for missing links between existing cards:
    ```
-   [3/6] [EXPAND] auth-overview
+   [2/8] [LINK] decision-jwt-vs-session ← auth-jwt-flow
+
+   target card: decision-jwt-vs-session.md
+   frontmatter:
+     links: [..., auth-jwt-flow]              # 加入 auth-jwt-flow
+
+   §內容 改寫（line 12 附近）:
+   - 此決策影響 JWT 流程設計。
+   + 此決策影響 [JWT 流程](./auth-jwt-flow.md)設計。
+
+   這個連結如何？
+   ```
+
+   **`[EXPAND]`** — show frontmatter changes and the prose diff:
+   ```
+   [4/8] [EXPAND] auth-overview
+
+   frontmatter:
+     links: [..., auth-jwt-flow, auth-refresh-token]
 
    在 ## 子題導覽 後插入:
       ## 子題導覽
@@ -295,7 +330,7 @@ Steps:
 
    **`[SECTION?]`** — show the section and where it goes:
    ```
-   [4/6] [SECTION?] decision-jwt-vs-session — add 前提與局限
+   [6/8] [SECTION?] decision-jwt-vs-session — add 前提與局限
 
    在 ## 何時往下追 之前插入:
       ## 前提與局限
@@ -307,7 +342,7 @@ Steps:
 
    **`[CONFLICT?]`** — show both sides and what would be written if marked; hint possible directions in the question, not as a fixed menu:
    ```
-   [5/6] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
+   [7/8] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
 
    auth-jwt-flow: "JWT 適合所有 stateless 場景"
    decision-jwt-vs-session: "JWT 僅限低敏感場景,因 revocation 缺陷"
@@ -328,21 +363,7 @@ Steps:
 
 **Never** edit source files in `src/`, `docs/`, `meetings/`, or `ref/`.
 
-### Workflow 3: `link` — find and weave links between existing cards
-
-**Trigger**: user asks "find missing links" or after a batch of `extract`.
-
-Steps:
-1. Pick the target card(s).
-2. Scan all other cards in `cards/` for concept overlap. Concept overlap = card B's title (or a close paraphrase) appears in card A's prose, OR card A and B share strong tag overlap and topic.
-3. For each potential link, propose:
-   - **frontmatter link**: add `card-b` to `links:` of `card-a`
-   - **inline link**: rewrite a specific sentence in `card-a` to embed `[...](./card-b.md)`
-4. Show the proposed prose change as a diff. Confirm before writing.
-
-Inline link rewrites should be **minimally invasive** — keep the original sentence's meaning, just wrap or substitute the relevant noun phrase.
-
-### Workflow 4: `promote` — turn a card into a hub, or create a new hub
+### Workflow 3: `promote` — turn a card into a hub, or create a new hub
 
 **Trigger**: user requests, or `audit` flags that a topic now has > ~5 cards with no hub.
 
@@ -357,7 +378,7 @@ Steps:
    - Inline links to the most important sub-cards woven into a short narrative
 4. Update `_root.md` if this is a top-level hub. Propose the change; confirm before writing.
 
-### Workflow 5: `audit` — health check
+### Workflow 4: `audit` — health check
 
 **Trigger**: user asks "check the wiki" / "what's broken".
 
@@ -369,7 +390,7 @@ python .claude/skills/project-wiki/scripts/audit.py
 
 The script runs 8 deterministic checks against `wiki/` and (unless `--no-write` is passed) writes report files to `wiki/_meta/orphans.md`, `wiki/_meta/stale.md`, and `wiki/_meta/conflicts.md`. Exit code is nonzero if any issues found.
 
-After it runs, **Claude reads the stdout output and summarises findings to the user**, then proposes fixes via other workflows (`link`, `promote`, `conflict-mark.py`). The script itself never auto-fixes.
+After it runs, **Claude reads the stdout output and summarises findings to the user**, then proposes fixes — typically by re-invoking `extract` (which handles new cards + `[LINK]` items), `promote` for hubs, or `conflict-mark.py` for marking conflicts. The script itself never auto-fixes.
 
 Checks performed by the script:
 
@@ -381,6 +402,10 @@ Checks performed by the script:
 6. **Broken links**: an inline `[text](./xyz.md)` or `links: [xyz]` where no `xyz.md` exists in `cards/`.
 7. **Single-sided conflicts**: card A has `conflicts: [B]` but card B does not list A. Conflict edges must be bidirectional — propose fixing.
 8. **Inbox pending**: list files currently in `wiki/_inbox/` with their age (days since file mtime). Purely informational — does not push the user to process them.
+
+**Claude-side check (semantic, not script-driven): missing links.** After the script's deterministic checks, Claude scans the wiki for cards whose prose mentions a concept covered by another existing card — by title, close paraphrase, or strong topical overlap — without being linked to it. Reports these as **missing-link candidates**. Fix path depends on what the user wants:
+- For one or two specific links, the user can just tell Claude "幫我把 X 連到 Y" and Claude does the edit directly (no workflow needed for a one-off).
+- For a related batch (e.g., all stem from the same source), re-invoke `extract` on that source; the missing connections show up as `[LINK]` items in its walkthrough.
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 
