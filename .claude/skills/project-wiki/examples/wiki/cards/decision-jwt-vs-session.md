@@ -31,10 +31,10 @@ tags: [decision, auth]
 **未選純 session** 因為:扛不住跨服務驗證的延遲。
 **未選純 JWT** 因為:無法主動撤銷已簽發的 token。
 
-實作落地見 [[auth-jwt-flow]],session 與撤銷邏輯見 [[auth-session-mgmt]]。
+實作落地見 [auth-jwt-flow](./auth-jwt-flow.md),session 與撤銷邏輯見 [auth-session-mgmt](./auth-session-mgmt.md)。
 
 ## 何時往下追
-- 實作怎麼做 → [[auth-jwt-flow]]
-- 撤銷怎麼運作 → [[auth-session-mgmt]]
+- 實作怎麼做 → [auth-jwt-flow](./auth-jwt-flow.md)
+- 撤銷怎麼運作 → [auth-session-mgmt](./auth-session-mgmt.md)
 - 完整決策記錄 → `meetings/2026-04-12-auth-design.md`
-- 其他歷史決策 → [[decisions-log]]
+- 其他歷史決策 → [decisions-log](./decisions-log.md)

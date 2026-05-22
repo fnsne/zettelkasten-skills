@@ -15,10 +15,10 @@ updated: 2026-05-15
 
 依問題類型導航——
 
-**想了解架構** → [[architecture-overview]]
-**想了解某個決策的脈絡** → [[decisions-log]]
-**想了解某個模組** → [[auth-overview]] / [[db-overview]] / [[api-overview]]
-**想找會議共識** → [[meetings-index]]
+**想了解架構** → [architecture-overview](./cards/architecture-overview.md)
+**想了解某個決策的脈絡** → [decisions-log](./cards/decisions-log.md)
+**想了解某個模組** → [auth-overview](./cards/auth-overview.md) / [db-overview](./cards/db-overview.md) / [api-overview](./cards/api-overview.md)
+**想找會議共識** → [meetings-index](./cards/meetings-index.md)
 
 <!-- 隨著卡片增加,可以加入更多切入點。但這張卡保持精簡,不超過 300 token。 -->
 
