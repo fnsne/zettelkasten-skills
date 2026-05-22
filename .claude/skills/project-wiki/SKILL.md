@@ -1,6 +1,6 @@
 ---
 name: project-wiki
-description: Build and maintain a Zettelkasten-style project wiki under `wiki/` in a project folder. Cards are atomic markdown notes that link to each other Wikipedia-style (via standard markdown links) and reference (but never modify) source files like code, docs, PDFs, and meeting notes. Use this skill whenever the user wants to extract cards from project material, link related cards, promote a card into a hub, audit wiki health, drop fleeting material into the inbox, or query the wiki to answer a project question. Trigger this skill for any mention of "card", "wiki", "Zettelkasten", "MOC", "knowledge base", "project notes", "inbox", or when the user asks Claude to "find", "look up", or "summarize" something from project documentation. Prefer this skill over reading raw source files when a `wiki/` folder exists in the project — the wiki is designed to answer questions with far fewer tokens than scanning source.
+description: Build and maintain a Zettelkasten-style project wiki under `wiki/` in a project folder. Cards are atomic markdown notes that link to each other Wikipedia-style (via standard markdown links) and reference (but never modify) source files like code, docs, PDFs, and meeting notes. Use this skill whenever the user wants to extract cards from project material, link related cards, promote a card into a 主題卡 (hub card), audit wiki health, drop fleeting material into the inbox, or query the wiki to answer a project question. Trigger this skill for any mention of "card", "wiki", "Zettelkasten", "MOC", "knowledge base", "project notes", "inbox", or when the user asks Claude to "find", "look up", or "summarize" something from project documentation. Prefer this skill over reading raw source files when a `wiki/` folder exists in the project — the wiki is designed to answer questions with far fewer tokens than scanning source.
 ---
 
 # Project Wiki (Zettelkasten for Projects)
@@ -9,7 +9,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 
 ## Core principles
 
-1. **Flat structure, emergent hierarchy.** All cards live in `cards/`. There is no `index/` folder. A card becomes a "hub" by virtue of being linked-to and by its content, not by its location.
+1. **Flat structure, emergent hierarchy.** All cards live in `cards/`. There is no `index/` folder. A card becomes a **主題卡 (hub card)** by virtue of being linked-to and by its content, not by its location. The term "hub" is kept here for searchability; in user-facing prose, call it 主題卡.
 2. **One concept per card.** The test: can you use the card's title as a noun phrase in another card's prose? If not, split it.
 3. **Sources are read-only.** Cards link back to source via `sources:` frontmatter. Never edit source files. If source changes, mark the card stale in `_meta/stale.md`.
 4. **Two link layers.** `frontmatter.links` is the machine-readable index (list of card ids). Inline standard markdown links `[display text](./other-card.md)` form the narrative — the wiki reads like Wikipedia, not like a directory.
@@ -106,7 +106,7 @@ payload 的 stateless token。根據[當初的決策](./decision-jwt-vs-session.
 **Required fields**: `id`, `created`, `sources` (can be empty list), `links` (can be empty list).
 **Optional fields**: `conflicts` (list of card-ids this card opposes — must be bidirectional, both sides list each other), `updated`, `tags`.
 **Optional sections**: `## 前提與局限` (when the card's content is a claim/decision — record the assumptions it rests on, and when it would need re-evaluation), `## 衝突與爭議` (narrative explanation of disagreements, pairs with `conflicts:` frontmatter).
-**Forbidden**: `type` field. A card's role (atomic / hub / decision / claim) is emergent from content, not declared.
+**Forbidden**: `type` field. A card's role (atomic / 主題卡 / decision / claim) is emergent from content, not declared.
 
 ### Three layers of links
 
@@ -143,7 +143,7 @@ When extracting cards, apply these rules. They make inline linking possible.
 - One decision → one card (e.g. "為什麼選 JWT")
 - One flow/process → one card (e.g. "JWT 簽發流程")
 - One schema/data structure → one card
-- One module overview → one card (this often becomes a hub)
+- One module overview → one card (this often becomes a 主題卡)
 - A meeting / PDF is **not** a card — it's a source. Extract the concepts inside it into multiple cards.
 
 **Rule 4 — When in doubt, split.** Two concepts in one card means neither can be referenced cleanly. Splitting is cheap; merging via inline links is free.
@@ -227,7 +227,7 @@ Steps:
 2. **Identify candidates and scan the wiki.** Identify N independent concepts following the splitting rules. For each, traverse the wiki from `_root.md` to find:
    - Existing card on the same concept → mark as `[EXPAND]` instead of `[NEW]`.
    - Cards on nearby concepts → record as link targets.
-   - Completely new branch with no hub → note for later `promote`.
+   - Completely new branch with no 主題卡 → note for later `promote`.
    - **Contradicts a neighbor card?** Read the neighbor's prose and ask "do these make opposing claims about the same question?" Be conservative — different framings ≠ conflict; different conclusions on the same question = conflict. If yes, plan a `[CONFLICT?]` item.
    - **Rests on premises?** (language like "選 X 而非 Y" / "採 X 策略" / "前提是…") → plan a `[SECTION?]` item adding `## 前提與局限`.
 
@@ -239,7 +239,7 @@ Steps:
 3. **Show the map.** List all planned items with title + intent only, in **dependency order**:
    - `[NEW]` cards first (so any `[LINK]` referencing them runs against real files)
    - `[LINK]` items grouped immediately after the item that motivated them (a `[NEW]`'s back-links, an existing missing-link)
-   - `[EXPAND]` for hubs after the cards they list
+   - `[EXPAND]` for 主題卡 after the cards they list
    - `[SECTION?]` / `[CONFLICT?]` after the cards they touch
    - `[UPDATE] _root.md` last
 
@@ -363,20 +363,20 @@ Steps:
 
 **Never** edit source files in `src/`, `docs/`, `meetings/`, or `ref/`.
 
-### Workflow 3: `promote` — turn a card into a hub, or create a new hub
+### Workflow 3: `promote` — turn a card into a 主題卡, or create a new 主題卡
 
-**Trigger**: user requests, or `audit` flags that a topic now has > ~5 cards with no hub.
+**Trigger**: user requests, or `audit` flags that a topic now has > ~5 cards with no 主題卡.
 
 Steps:
 1. Identify the cluster of related cards.
 2. Choose between:
-   - **Expand an existing card** into a hub (preferred if one card is already broadly about the topic).
-   - **Create a new hub card** if no good candidate exists.
-3. The hub card must have:
+   - **Expand an existing card** into a 主題卡 (preferred if one card is already broadly about the topic).
+   - **Create a new 主題卡** if no good candidate exists.
+3. The 主題卡 must have:
    - A definition sentence summarizing the whole subtopic
    - A "子題導覽" section listing all cluster cards with one-line descriptions
    - Inline links to the most important sub-cards woven into a short narrative
-4. Update `_root.md` if this is a top-level hub. Propose the change; confirm before writing.
+4. Update `_root.md` if this is a top-level 主題卡. Propose the change; confirm before writing.
 
 ### Workflow 4: `audit` — health check
 
@@ -390,11 +390,11 @@ python .claude/skills/project-wiki/scripts/audit.py
 
 The script runs 8 deterministic checks against `wiki/` and (unless `--no-write` is passed) writes report files to `wiki/_meta/orphans.md`, `wiki/_meta/stale.md`, and `wiki/_meta/conflicts.md`. Exit code is nonzero if any issues found.
 
-After it runs, **Claude reads the stdout output and summarises findings to the user**, then proposes fixes — typically by re-invoking `extract` (which handles new cards + `[LINK]` items), `promote` for hubs, or `conflict-mark.py` for marking conflicts. The script itself never auto-fixes.
+After it runs, **Claude reads the stdout output and summarises findings to the user**, then proposes fixes — typically by re-invoking `extract` (which handles new cards + `[LINK]` items), `promote` for 主題卡, or `conflict-mark.py` for marking conflicts. The script itself never auto-fixes.
 
 Checks performed by the script:
 
-1. **Orphans**: cards with zero inbound `frontmatter.links` from any other card. Likely candidates for inline-linking from a hub.
+1. **Orphans**: cards with zero inbound `frontmatter.links` from any other card. Likely candidates for inline-linking from a 主題卡.
 2. **Inline-orphan**: card appears in some `frontmatter.links` but **never** appears as an inline markdown link in any other card's prose. Means: indexed but not narratively woven. Propose where to weave it in.
 3. **Dead-end cards**: cards with zero outbound links AND no `## 何時往下追` section. Suggest follow-ups.
 4. **Stale**: source file `mtime` is newer than card `updated` field. Listed in `_meta/stale.md` for human review. Do not auto-update — the card author needs to decide what changed.
@@ -437,4 +437,4 @@ Checks performed by the script:
 If `wiki/` doesn't exist when the skill is invoked:
 1. Create `wiki/`, `wiki/cards/`, `wiki/_inbox/`, `wiki/ref/`, `wiki/_meta/`.
 2. Create `wiki/_root.md` from the template above, with the project description filled in (ask user).
-3. Optionally seed with a few top-level hub cards based on what's visible in the project root (e.g. if there's `src/auth/`, propose `auth-overview` as a stub).
+3. Optionally seed with a few top-level 主題卡 based on what's visible in the project root (e.g. if there's `src/auth/`, propose `auth-overview` as a stub).

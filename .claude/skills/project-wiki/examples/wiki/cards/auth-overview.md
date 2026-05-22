@@ -12,7 +12,7 @@ links:
   - auth-session-mgmt
   - decision-jwt-vs-session
   - security-token-rotation
-tags: [auth, hub]
+tags: [auth, 主題卡]
 ---
 
 # Auth 模組總覽
