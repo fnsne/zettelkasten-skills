@@ -218,48 +218,113 @@ Steps:
 
 **Trigger**: user provides one or more source files (code, PDF, doc, meeting notes, or an inbox item) and asks to extract cards.
 
+**Shape**: this is a **walk-through** workflow, not a batch. After an initial map, Claude presents ONE item at a time and writes it immediately on accept, then moves to the next. Each user reply is about a single concrete thing.
+
 Steps:
-1. Read the source material. If it's a `_inbox/...` file, treat it as the originating source for the resulting cards.
-2. Identify N independent concepts following the splitting rules. List them as candidate cards.
-3. **For each candidate, traverse the existing wiki** starting from `_root.md` to find:
-   - Is there already a card on this concept? → propose **expand existing card** instead of creating new.
-   - Are there cards on nearby concepts? → note them as link targets for the new card.
-   - Is this a completely new branch? → flag that a new hub may be needed (suggest `promote` later).
-   - **Does any neighbor card contradict this candidate?** Read the neighbor's prose and ask "do these make opposing claims about the same question?" If yes, flag as `[CONFLICT?]` in step 4. Be conservative — different framings of the same fact are not conflicts; different conclusions on the same question are.
-   - **Does the candidate's content rest on premises** (language like "選 X 而非 Y" / "採 X 策略" / "X 比 Y 好" / "前提是…")? If yes, propose adding a `## 前提與局限` section as `[SECTION?]` in step 4. This is a content cue — the card itself still has no `type:`.
-4. **Present a proposal** to the user. Prefix every item with `[1]`, `[2]`, ... so the user can reference them by number (see "Numbered proposal items" in Operating conventions):
+
+1. **Read the source material.** If it's a `_inbox/...` file, treat it as the originating source for the resulting cards.
+
+2. **Identify candidates and scan the wiki.** Identify N independent concepts following the splitting rules. For each, traverse the wiki from `_root.md` to find:
+   - Existing card on the same concept → mark as `[EXPAND]` instead of `[NEW]`.
+   - Cards on nearby concepts → record as link targets.
+   - Completely new branch with no hub → note for later `promote`.
+   - **Contradicts a neighbor card?** Read the neighbor's prose and ask "do these make opposing claims about the same question?" Be conservative — different framings ≠ conflict; different conclusions on the same question = conflict. If yes, plan a `[CONFLICT?]` item.
+   - **Rests on premises?** (language like "選 X 而非 Y" / "採 X 策略" / "前提是…") → plan a `[SECTION?]` item adding `## 前提與局限`.
+
+3. **Show the map.** List all planned items with title + intent only, in **dependency order** (cards a hub will link to come before the hub; `[CONFLICT?]` / `[SECTION?]` after the cards they touch; `_root.md` last). Per the "Numbered proposal items" convention, prefix each with `[1]`, `[2]`, ...
    ```
-   From src/auth/jwt.ts I propose:
-     [1] [NEW] auth-jwt-flow      → will link to: auth-overview, decision-jwt-vs-session
-     [2] [NEW] auth-refresh-token → will link to: auth-jwt-flow, security-token-rotation
-     [3] [EXPAND] auth-overview   → add subsection mentioning the new cards
-     [4] [UPDATE] _root.md        → no change (auth-overview already linked)
+   From src/auth/jwt.ts I propose 6 changes — going through them one at a time:
+     [1] [NEW]       auth-jwt-flow
+     [2] [NEW]       auth-refresh-token
+     [3] [EXPAND]    auth-overview — add sub-cards to 子題導覽
+     [4] [SECTION?]  decision-jwt-vs-session — add 前提與局限
+     [5] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
+     [6] [UPDATE]    _root.md (no change — auth-overview already linked)
 
-     [5] [SECTION?] decision-jwt-vs-session → propose adding ## 前提與局限
-         draft: "本決策前提是 token 生命週期 < 1hr。若改長期 token,
-                需重評 revocation 機制。"
-
-     [6] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
-         新卡: "JWT 適合所有 stateless 場景"
-         舊卡: "JWT 僅限低敏感場景,因 revocation 缺陷"
-         (m) mark    — 兩張卡 frontmatter 互加 conflicts:,原文不動
-         (r) resolve — 現在處理,會再問您要改哪一邊 / 合併 / 重寫
-         (n) not really — 不算衝突,別標
-         (s) skip    — 跳過,extract 繼續
-
-   Confirm? (y / edit <n> / skip <n>)
+   Proceed? (回 y 開始；要調整提案內容或跳過幾項，講一下即可)
    ```
-5. On confirmation, write the cards. Each new card must include:
-   - Definition sentence as the first line of `## 摘要`
-   - Inline links to existing cards mentioned in the body (use `[display text](./card-id.md)`)
-   - `sources:` pointing to exact paths + lines/pages
-   - `## 何時往下追` section
-   - **If a `[SECTION?]` proposal was accepted**: include the `## 前提與局限` section using the draft (or the user's edited version).
-   - **For each `[CONFLICT?]` answered `m` (mark)**: invoke `python .claude/skills/project-wiki/scripts/conflict-mark.py <card-a> <card-b> --description "<one-liner>"`. The script bidirectionally adds the conflict to both cards' `conflicts:` frontmatter and appends to `_meta/conflicts.md`. Do **not** modify either card's prose.
-   - **For each `[CONFLICT?]` answered `r` (resolve)**: enter a resolution sub-flow before writing — ask the user whether to (a) keep one side and rewrite the other, (b) reconcile both into one revised wording, or (c) create a new card that frames both as valid under different conditions. Show the diff. Confirm.
-   - Answers `n` and `s`: no further action; the conflict is not recorded.
-6. **Update affected hub cards** in the same pass: if `auth-overview` exists and a new sub-card was created, propose insertion into its "子題導覽" or prose. Show the diff. Confirm.
-7. **If the source was an inbox item**: after cards are written and confirmed, run `python .claude/skills/project-wiki/scripts/inbox-promote.py wiki/_inbox/<filename>`. The script moves the file to `wiki/ref/` and rewrites any card's `sources:` path that referenced the old `_inbox/` location. The inbox file is **never deleted** — it's preserved in `ref/` for traceability.
+
+4. **Walk through each item in order.** For each, display the *actual change* (full card body for `[NEW]`, diff for `[EXPAND]`, etc.) — not just a summary — then ask in natural language. Interpret the reply per "Interpreting natural-language replies in walk-through workflows" in Operating conventions.
+
+   On accept: **apply the change immediately** before moving on. Later items often link to earlier ones; writing now means subsequent proposals can see the actual file state and use real inline links.
+
+   On edit: apply the user's modification, **re-display the full updated draft**, then ask again. Repeat until accepted or skipped — never write an edited card without showing the edit applied.
+
+   On abort: stop. Items already written stay (atomic, complete on their own).
+
+   Display format by type:
+
+   **`[NEW]`** — show the complete draft card (frontmatter + body):
+   ```
+   [1/6] [NEW] auth-jwt-flow
+
+   ---
+   id: auth-jwt-flow
+   title: JWT-based stateless auth flow
+   tags: [auth, jwt]
+   links: [auth-overview, decision-jwt-vs-session]
+   sources: [src/auth/jwt.ts:1-58]
+   created: 2026-05-22
+   ---
+
+   ## 摘要
+   JWT-based stateless auth flow used by /api routes.
+
+   ## 內容
+   [auth-overview](./auth-overview.md) 採 JWT 作為 access token...
+
+   ## 何時往下追
+   - refresh 流程 → [auth-refresh-token](./auth-refresh-token.md)
+   - 為何選 JWT → [decision-jwt-vs-session](./decision-jwt-vs-session.md)
+
+   這張卡片如何？
+   ```
+
+   **`[EXPAND]`** — show the diff and where it lands:
+   ```
+   [3/6] [EXPAND] auth-overview
+
+   在 ## 子題導覽 後插入:
+      ## 子題導覽
+      - ...(既有條目)
+   +  - [auth-jwt-flow](./auth-jwt-flow.md) — JWT 簽發與驗證流程
+   +  - [auth-refresh-token](./auth-refresh-token.md) — refresh token 設計
+
+   這樣 expand 如何？
+   ```
+
+   **`[SECTION?]`** — show the section and where it goes:
+   ```
+   [4/6] [SECTION?] decision-jwt-vs-session — add 前提與局限
+
+   在 ## 何時往下追 之前插入:
+      ## 前提與局限
+      本決策前提是 token 生命週期 < 1hr。
+      若改長期 token,需重評 revocation 機制。
+
+   要這樣加嗎？
+   ```
+
+   **`[CONFLICT?]`** — show both sides and what would be written if marked; hint possible directions in the question, not as a fixed menu:
+   ```
+   [5/6] [CONFLICT?] auth-jwt-flow ↔ decision-jwt-vs-session
+
+   auth-jwt-flow: "JWT 適合所有 stateless 場景"
+   decision-jwt-vs-session: "JWT 僅限低敏感場景,因 revocation 缺陷"
+
+   如果只是標起來，會做:
+     兩張卡 frontmatter 互加 conflicts:
+     _meta/conflicts.md 新增: "JWT 適用範圍 vs revocation 缺陷"
+
+   這個怎麼處理？可以只標起來、現在 reconcile 一邊或合併重寫、或判定不算真衝突。
+   ```
+
+5. **For `[CONFLICT?]` items specifically**, map the user's intent to the right write:
+   - Mark only ("標起來" / "標一下") → invoke `python .claude/skills/project-wiki/scripts/conflict-mark.py <card-a> <card-b> --description "<one-liner>"`. The script bidirectionally adds the conflict to both cards' `conflicts:` frontmatter and appends to `_meta/conflicts.md`. Do **not** modify either card's prose.
+   - Reconcile ("現在處理" / "想 reconcile") → enter a resolution sub-flow: ask whether to (a) keep one side and rewrite the other, (b) reconcile both into one revised wording, or (c) create a new card framing both as valid under different conditions. Show the diff. Re-ask before writing.
+   - Not really a conflict / skip → no action.
+
+6. **If the source was an inbox item**, after the walk-through ends (whether complete or aborted after at least one card was written), run `python .claude/skills/project-wiki/scripts/inbox-promote.py wiki/_inbox/<filename>`. The script moves the file to `wiki/ref/` and rewrites any card's `sources:` path that referenced the old `_inbox/` location. The inbox file is **never deleted** — it's preserved in `ref/` for traceability.
 
 **Never** edit source files in `src/`, `docs/`, `meetings/`, or `ref/`.
 
@@ -327,7 +392,14 @@ Checks performed by the script:
 - **Source references**: always include exact lines (for code) or pages (for PDFs). `src/foo.ts:42-58`, `docs/spec.pdf` p.4-6.
 - **Inline links**: standard CommonMark format `[display text](./other-card.md)`. Use `./` for same-folder cards; `../ref/...` and `../_root.md` for cross-folder. Display text should be the natural prose noun phrase, not the id.
 - **No deletions without confirmation**. Even orphan cards stay until the user explicitly says delete. `ref/` items are never deleted by the skill.
-- **Numbered proposal items**. Whenever a workflow presents two or more proposed changes for the user to confirm / edit / skip, prefix each item with `[1]`, `[2]`, `[3]`, ... so the user can reference them by number (`edit 2`, `skip 3`). Apply this even when items already have card-ids — the user shouldn't have to retype a long id like `decision-jwt-vs-session`. Numbers are local to one proposal; if some items are accepted and you re-propose the rest, renumber from 1.
+- **Numbered proposal items**. Whenever a workflow presents two or more items in a single list (typically the map step of a walk-through), prefix each with `[1]`, `[2]`, `[3]`, ... so the user can reference them by number when responding (e.g. "跳過 4 和 5"). Apply this even when items already have card-ids — the user shouldn't have to retype a long id like `decision-jwt-vs-session`. Numbers are local to one proposal; if you re-propose after some items are handled, renumber from 1.
+- **Interpreting natural-language replies in walk-through workflows**. When asking the user about a single proposal (e.g., "這張卡片如何？"), do not present a fixed `(y) / (e) / (s)` menu — interpret the reply by intent:
+  - 採納 ("好", "可以", "沒問題", "寫吧", "yes") → apply the change as drafted
+  - 跳過 ("跳過", "不要", "算了", "下一個", "skip") → don't apply; move on
+  - 具體修改 ("摘要改成 X", "link 拿掉 Y", "加個 tag Z") → apply the edit, re-display the full updated draft, ask again
+  - 中止 ("停", "全部不要了", "abort") → stop the workflow; already-applied items stay
+  - 提問 / 不確定 ("為什麼這樣寫", "我不太懂") → discuss; do not apply yet
+  - 模糊不清 → ask back for clarification, never guess
 
 ## When to refuse or defer
 
