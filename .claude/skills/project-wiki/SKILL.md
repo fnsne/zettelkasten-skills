@@ -199,7 +199,7 @@ Mechanical, deterministic operations live in Python scripts under `.claude/skill
 
 ## Workflows
 
-The skill has four workflows. Always announce which one is running, and always run them semi-automatically (propose → confirm → write). Link maintenance is **not** a separate workflow — it's folded into `extract` as `[LINK]` items and surfaced by `audit` as missing-link findings.
+The skill has seven workflows. Always announce which one is running, and always run them semi-automatically (propose → confirm → write). They group as: **entry adapters** (`extract` from a source file, `fleet` from the current discussion) that funnel into a shared card pipeline; **read-only judgement steps** (`slice`, `relate`) that can be invoked standalone and are also called inside that pipeline; plus `query`, `promote`, and `audit`. Link maintenance is **not** a separate workflow — it's folded into `extract` as `[LINK]` items and surfaced by `audit` as missing-link findings.
 
 ### Workflow 1: `query` — answer a question using the wiki
 
