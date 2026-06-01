@@ -409,6 +409,31 @@ Checks performed by the script:
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 
+### Workflow 5: `slice` — list candidate cards in a source (read-only)
+
+**Trigger**: user wants to see what cards/knowledge points could be cut out of a source, without committing to writing them. Phrasings: 「這份文件能切出哪些知識點」「slice 一下這份」「這份有哪些卡可以做」.
+
+**Shape**: read-only. Produces a proposal map and stops. Writes nothing.
+
+**Input**: one source — a file under `src/`, `docs/`, `meetings/`, or an item under `wiki/_inbox/`.
+
+Steps:
+
+1. Read the source.
+2. Run `extract` step 2's candidate-identification: identify N independent concepts per the splitting rules (Rules 1–4 in "Card splitting rules"), and do the light wiki scan from `_root.md` to tag each `NEW` or `EXPAND → <card-id>` (an existing card already covers it).
+3. Present the numbered map (title + tag + one-line description), then ask which to write:
+
+   ```
+   從 docs/auth-spec.pdf 可以切出這些知識點：
+     [1] JWT 簽發流程            (NEW)
+     [2] refresh token 設計      (NEW)
+     [3] token 撤銷策略          (EXPAND → security-token-rotation)
+     [4] 為什麼選 JWT            (NEW，像 decision 卡)
+   要寫哪幾張？(挑了就接 extract；或我可以只列不做)
+   ```
+
+**Boundary**: `slice` does NOT enumerate `[LINK]` items, propose conflicts/premises, or write any file — those belong to the full `extract` walk-through. `slice` is exactly `extract` steps 1–2's candidate map surfaced as a standalone, stop-early operation. When the user picks cards to write, continue into `extract` from step 3 onward.
+
 ## Operating conventions
 
 - **Filenames**: `cards/<id>.md` where `<id>` matches the frontmatter `id`. Use kebab-case, lowercase, ASCII (no spaces, no CJK in filenames — but card titles and content can be any language). Lowercase matters for Linux case-sensitivity.
