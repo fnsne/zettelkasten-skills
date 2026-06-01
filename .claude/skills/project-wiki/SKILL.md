@@ -224,7 +224,7 @@ Steps:
 
 1. **Read the source material.** If it's a `_inbox/...` file, treat it as the originating source for the resulting cards.
 
-2. **Identify candidates and scan the wiki.** Identify N independent concepts following the splitting rules. For each, traverse the wiki from `_root.md` to find:
+2. **Identify candidates and scan the wiki.** Identify N independent concepts following the splitting rules. *(This candidate-identification + NEW/EXPAND scan is the canonical home of the **`slice`** procedure, Workflow 5; the link-target scan in this step is the canonical home of **`relate`**, Workflow 6. Both can also be invoked standalone and read-only — `extract` runs them and then writes.)* For each, traverse the wiki from `_root.md` to find:
    - Existing card on the same concept → mark as `[EXPAND]` instead of `[NEW]`.
    - Cards on nearby concepts → record as link targets.
    - Completely new branch with no 主題卡 → note for later `promote`.
