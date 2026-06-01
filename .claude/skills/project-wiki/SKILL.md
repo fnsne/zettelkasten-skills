@@ -434,6 +434,33 @@ Steps:
 
 **Boundary**: `slice` does NOT enumerate `[LINK]` items, propose conflicts/premises, or write any file — those belong to the full `extract` walk-through. `slice` is exactly `extract` steps 1–2's candidate map surfaced as a standalone, stop-early operation. When the user picks cards to write, continue into `extract` from step 3 onward.
 
+### Workflow 6: `relate` — find related cards/docs and where links go (read-only)
+
+**Trigger**: user wants the cards/documents related to a piece of content, and where links should be placed. Phrasings: 「找跟這張卡相關的卡」「這段內容該連去哪」「relate 一下」.
+
+**Shape**: read-only. Advisory only — writes nothing.
+
+**Input**: a piece of content — an existing card id, a draft card, or a concept/snippet of text.
+
+Steps:
+
+1. Traverse the wiki from `_root.md` downward (the same scan as `extract` step 2's link-target search).
+2. Collect related cards — same concept / nearby concept / candidate 主題卡 — and related source documents.
+3. For each related card, state WHERE the link should go and in which direction(s): frontmatter `links:`, inline in `## 摘要` (definition-level mention), `## 何時往下追` (navigation hint), or a 主題卡's `## 子題導覽`. For each related document, note it goes under `sources:`.
+4. Present the grouped suggestions:
+
+   ```
+   跟「JWT 簽發流程」相關的：
+   卡片：
+     - auth-overview            → 掛在它的「子題導覽」(主題卡)，雙向
+     - decision-jwt-vs-session  → 摘要內聯一句「依當初決策…」
+     - security-token-rotation  → 「何時往下追」放一條
+   文件：
+     - docs/auth-spec.pdf p.4-6 → 進 sources:
+   ```
+
+**Boundary**: `relate` only proposes; it edits no card. (Contrast: `extract`'s `[LINK]` items WRITE after confirmation — `relate` is the advisory-only version.) The user places the links, or asks Claude to apply them as a follow-up edit.
+
 ## Operating conventions
 
 - **Filenames**: `cards/<id>.md` where `<id>` matches the frontmatter `id`. Use kebab-case, lowercase, ASCII (no spaces, no CJK in filenames — but card titles and content can be any language). Lowercase matters for Linux case-sensitivity.
