@@ -461,6 +461,23 @@ Steps:
 
 **Boundary**: `relate` only proposes; it edits no card. (Contrast: `extract`'s `[LINK]` items WRITE after confirmation — `relate` is the advisory-only version.) The user places the links, or asks Claude to apply them as a follow-up edit.
 
+### Workflow 7: `fleet` — capture the current discussion into the inbox
+
+**Trigger**: user wants to turn the current session's discussion into wiki material. Phrasings: 「把這段討論記成閃記」「整理成卡片初稿」「fleet」「把我們討論的整理進 wiki」.
+
+**Disambiguation**: only enter `fleet` when the message mentions 卡片 / 閃記 / inbox / wiki. If it is ambiguous whether the user wants a wiki note or a work log (the `jackli-work-log` skill also reacts to 「把這段討論存起來」「整理一下」), ask first: 「要記成 wiki 閃記，還是寫工作日誌？」
+
+**Shape**: a thin entry adapter. It only writes a fleeting note; it does not extract cards or move files.
+
+Steps:
+
+1. Identify the relevant span of the current discussion. If unclear, confirm with the user which part to capture.
+2. Write it to `wiki/_inbox/YYYY-MM-DD-slug.md` as free-form markdown (low friction — no required frontmatter or structure). This file is the originating source for any cards later extracted from it.
+3. Show the draft and confirm.
+4. Ask 「要現在接著萃取成卡片嗎？」 — on yes, run `extract` (Workflow 2) on the new inbox file (which offers `slice` → walk-through). On no, leave it in `_inbox/` for later.
+
+**Boundary**: `fleet` creates ONLY the inbox file; it moves nothing. The inbox→`ref/` promotion happens at `extract`'s tail (step 6, `inbox-promote.py`), and only when at least one card was written. So `fleet` followed by `extract` with zero cards written leaves the file in `_inbox/`.
+
 ## Operating conventions
 
 - **Filenames**: `cards/<id>.md` where `<id>` matches the frontmatter `id`. Use kebab-case, lowercase, ASCII (no spaces, no CJK in filenames — but card titles and content can be any language). Lowercase matters for Linux case-sensitivity.
