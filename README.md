@@ -9,6 +9,7 @@ The wiki is designed to be **read primarily by Claude** to answer your project q
 - **Atomic, linkable cards** — one concept per card, cross-references via standard CommonMark markdown links
 - **Source files stay read-only** — cards reference paths + line/page numbers; your code, docs, and meeting notes are never edited
 - **Inbox for fleeting notes** — drop captures into `wiki/_inbox/`, Claude helps turn them into cards later; processed items are preserved in `wiki/ref/`
+- **Multiple entry points** — extract from a source file, or `fleet` the current discussion into the inbox; plus standalone read-only `slice` (what cards a source yields) and `relate` (which cards/docs a piece of content connects to)
 - **Conflict tracking** — when two cards make opposing claims, mark a bidirectional conflict and surface it on audit
 - **Premise tracking for decisions** — optional `## 前提與局限` section records the assumptions a decision rests on
 - **Health checks via script** — `audit.py` runs 8 deterministic checks (orphans, broken links, stale sources, etc.) without burning LLM tokens
