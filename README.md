@@ -10,6 +10,7 @@ The wiki is designed to be **read primarily by Claude** to answer your project q
 - **Source files stay read-only** — cards reference paths + line/page numbers; your code, docs, and meeting notes are never edited
 - **Inbox for fleeting notes** — drop captures into `wiki/_inbox/`, Claude helps turn them into cards later; processed items are preserved in `wiki/ref/`
 - **Multiple entry points** — extract from a source file, or `fleet` the current discussion into the inbox; plus standalone read-only `slice` (what cards a source yields) and `relate` (which cards/docs a piece of content connects to)
+- **Reads great in Obsidian** — open the `wiki/` folder as a vault for backlinks, graph, and search; cards carry a `title:` field so the Front Matter Title plugin can show concept names (not kebab-case ids) while filenames stay ASCII
 - **Conflict tracking** — when two cards make opposing claims, mark a bidirectional conflict and surface it on audit
 - **Premise tracking for decisions** — optional `## 前提與局限` section records the assumptions a decision rests on
 - **Health checks via script** — `audit.py` runs 8 deterministic checks (orphans, broken links, stale sources, etc.) without burning LLM tokens

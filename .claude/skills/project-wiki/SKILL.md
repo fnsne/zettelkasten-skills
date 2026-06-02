@@ -68,6 +68,7 @@ Every card is a markdown file with YAML frontmatter.
 ```markdown
 ---
 id: auth-jwt-flow
+title: JWT 簽發流程
 created: 2026-05-15
 updated: 2026-05-15
 sources:
@@ -104,6 +105,7 @@ payload 的 stateless token。根據[當初的決策](./decision-jwt-vs-session.
 ```
 
 **Required fields**: `id`, `created`, `sources` (can be empty list), `links` (can be empty list).
+**Recommended field**: `title` — the human-readable card title, mirroring the `# H1`. Lets Obsidian and similar tools show the concept name instead of the kebab-case `id` in backlinks, file explorer, and graph (see "Reading the wiki in Obsidian"). `slice` / `extract` / `fleet` write it on every new card.
 **Optional fields**: `conflicts` (list of card-ids this card opposes — must be bidirectional, both sides list each other), `updated`, `tags`.
 **Optional sections**: `## 前提與局限` (when the card's content is a claim/decision — record the assumptions it rests on, and when it would need re-evaluation), `## 衝突與爭議` (narrative explanation of disagreements, pairs with `conflicts:` frontmatter).
 **Forbidden**: `type` field. A card's role (atomic / 主題卡 / decision / claim) is emergent from content, not declared.
@@ -147,6 +149,15 @@ When extracting cards, apply these rules. They make inline linking possible.
 - A meeting / PDF is **not** a card — it's a source. Extract the concepts inside it into multiple cards.
 
 **Rule 4 — When in doubt, split.** Two concepts in one card means neither can be referenced cleanly. Splitting is cheap; merging via inline links is free.
+
+## Reading the wiki in Obsidian
+
+The wiki renders in any markdown viewer, but [Obsidian](https://obsidian.md) is the best reader — it gives backlinks, a graph view, quick-switch, and full-text search over the cards. Guidance:
+
+- **Open the `wiki/` folder itself as the vault**, not the parent project root. A code-repo root drags in `node_modules` / build output and can choke Obsidian's indexer. If you must open the project root (e.g. to follow inline links to docs that live outside `wiki/`), add the heavy folders (`node_modules/`, `dist/`) to Settings → Files & links → Excluded files.
+- **Backlinks and the graph come from the inline `[text](./other-card.md)` links, not the frontmatter `links:` array** — Obsidian treats a bare-string `links:` list as plain properties, not edges. This is the practical reason every card weaves its links inline as well as listing them in frontmatter.
+- **Readable titles**: Obsidian's backlinks / explorer / graph display the file's `id` (kebab-case), not the `# H1`. To show the human title instead, give each card a `title:` field (the workflows do this) and install the **Front Matter Title** community plugin, point it at the `title` property, and enable its Explorer / Graph / Backlink features. Filenames stay ASCII — so `id`s and links remain stable and Git-host-safe — while the UI shows the concept name.
+- **Do not rename card files to CJK** to get readable names: it couples `id`s to non-ASCII filenames, risks NFC/NFD git mismatches across OSes, and breaks link rendering on Git hosts. The `title:` + plugin route gives the same readability without those costs.
 
 ## The `_root.md` entry point
 
