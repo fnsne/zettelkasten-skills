@@ -13,7 +13,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 2. **One concept per card.** The test: can you use the card's title as a noun phrase in another card's prose? If not, split it.
 3. **Sources are read-only.** Cards link back to source via `sources:` frontmatter. Never edit source files. If source changes, mark the card stale in `_meta/stale.md`.
 4. **Two link layers.** `frontmatter.links` is the machine-readable index (list of card ids). Inline standard markdown links `[display text](./other-card.md)` form the narrative — the wiki reads like Wikipedia, not like a directory.
-5. **Semi-automatic.** Every extract / promote action proposes changes and waits for user confirmation. Never silently mass-edit cards.
+5. **Semi-automatic — showing is not confirming.** Every extract / promote action proposes each change, shows its **full content**, then **stops and waits for the user's reply to that specific change** before writing it. Displaying a draft is not permission to write it — only the user's reply to that draft is. Never write a card in the same turn you first show it; never mass-edit cards.
 
 ## Directory layout
 
@@ -272,13 +272,23 @@ Steps:
    Proceed? (回 y 開始；要調整提案內容或跳過幾項，講一下即可)
    ```
 
+   A `y` here approves *starting the walk-through only* — it shows titles + intent, not card bodies, so it is **never** approval to write any card's content. The same goes for any standing pressure the user gave before seeing content (「我趕時間」「弄快一點」「全部都好，直接做」): it sets the pace, it does not authorize writing unseen drafts.
+
 4. **Walk through each item in order.** For each, display the *actual change* (full card body for `[NEW]`, diff for `[EXPAND]`, etc.) — not just a summary — then ask in natural language. Interpret the reply per "Interpreting natural-language replies in walk-through workflows" in Operating conventions.
 
-   On accept: **apply the change immediately** before moving on. Later items often link to earlier ones; writing now means subsequent proposals can see the actual file state and use real inline links.
+   **Show, then STOP — display and write are two separate turns.** After you show an item's full content, **end your turn and wait for the user's actual reply to that item.** Do not create or modify the file until they have replied to *that* draft. If you find yourself about to write a card in the same turn you first displayed it, you are skipping exactly the confirmation the user wants — STOP.
 
-   On edit: apply the user's modification, **re-display the full updated draft**, then ask again. Repeat until accepted or skipped — never write an edited card without showing the edit applied.
+   On accept (the user replied approving *this* item): **apply the change** before moving on. Later items often link to earlier ones; writing the accepted item now means subsequent proposals can see the actual file state and use real inline links.
+
+   On edit / 調整: apply the user's modification to the draft, **re-display the full adjusted draft, and STOP again** — never write an adjusted draft in the same turn you adjusted it. Repeat (show → wait → reply) until the user approves or skips. "改一下然後直接寫下去" is the exact failure to avoid: every adjustment gets shown and re-confirmed first.
 
    On abort: stop. Items already written stay (atomic, complete on their own).
+
+   **Red flags — STOP, you are about to write something unconfirmed:**
+   - "User said 趕時間 / 全部都好, so I'll write all items now" — that was given before the content existed; it is not content approval.
+   - "I'll show the draft and write it in the same message" — showing ≠ confirming; the user gets no turn to react.
+   - "They asked me to adjust X, so I'll just apply it and move on" — re-display the adjusted draft and wait.
+   - "It's obviously what they want" — show it and let them say so.
 
    Display format by type:
 
@@ -499,7 +509,7 @@ Steps:
 - **No deletions without confirmation**. Even orphan cards stay until the user explicitly says delete. `ref/` items are never deleted by the skill.
 - **Numbered proposal items**. Whenever a workflow presents two or more items in a single list (typically the map step of a walk-through), prefix each with `[1]`, `[2]`, `[3]`, ... so the user can reference them by number when responding (e.g. "跳過 4 和 5"). Apply this even when items already have card-ids — the user shouldn't have to retype a long id like `decision-jwt-vs-session`. Numbers are local to one proposal; if you re-propose after some items are handled, renumber from 1.
 - **Interpreting natural-language replies in walk-through workflows**. When asking the user about a single proposal (e.g., "這張卡片如何？"), do not present a fixed `(y) / (e) / (s)` menu — interpret the reply by intent:
-  - 採納 ("好", "可以", "沒問題", "寫吧", "yes") → apply the change as drafted
+  - 採納 ("好", "可以", "沒問題", "寫吧", "yes"), **as a reply to the displayed draft** → apply the change as drafted. Approval the user gave *before* the draft was on screen (a map-level "y", a standing 「趕時間」) does not count — show the full content and wait for a fresh reply.
   - 跳過 ("跳過", "不要", "算了", "下一個", "skip") → don't apply; move on
   - 具體修改 ("摘要改成 X", "link 拿掉 Y", "加個 tag Z") → apply the edit, re-display the full updated draft, ask again
   - 中止 ("停", "全部不要了", "abort") → stop the workflow; already-applied items stay
