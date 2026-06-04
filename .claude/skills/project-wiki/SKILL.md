@@ -201,7 +201,7 @@ Mechanical, deterministic operations live in Python scripts under `.claude/skill
 
 | Operation | Implementation |
 |---|---|
-| Audit (all 9 health checks + `_meta/` writes) | `scripts/audit.py` |
+| Audit (all 10 health checks + `_meta/` writes) | `scripts/audit.py` |
 | Mark a bidirectional conflict between two cards | `scripts/conflict-mark.py` |
 | Promote an inbox file to `ref/` and rewrite card `sources:` paths | `scripts/inbox-promote.py` |
 | Concept identification, contradiction detection, link proposals, query traversal | Claude |
@@ -416,7 +416,7 @@ Steps:
 python .claude/skills/project-wiki/scripts/audit.py
 ```
 
-The script runs 9 deterministic checks against `wiki/` and (unless `--no-write` is passed) writes report files to `wiki/_meta/orphans.md`, `wiki/_meta/stale.md`, and `wiki/_meta/conflicts.md`. Exit code is nonzero if any issues found.
+The script runs 10 deterministic checks against `wiki/` and (unless `--no-write` is passed) writes report files to `wiki/_meta/orphans.md`, `wiki/_meta/stale.md`, and `wiki/_meta/conflicts.md`. Exit code is nonzero if any issues found.
 
 After it runs, **Claude reads the stdout output and summarises findings to the user**, then proposes fixes — typically by re-invoking `extract` (which handles new cards + `[LINK]` items), `promote` for 主題卡, or `conflict-mark.py` for marking conflicts. The script itself never auto-fixes.
 
@@ -430,13 +430,14 @@ Checks performed by the script:
 6. **Broken links**: an inline `[text](./xyz.md)` or `links: [xyz]` where no `xyz.md` exists in `cards/`.
 7. **Single-sided conflicts**: card A has `conflicts: [B]` but card B does not list A. Conflict edges must be bidirectional — propose fixing.
 8. **Inbox pending**: list files currently in `wiki/_inbox/` with their age (days since file mtime). Purely informational — does not push the user to process them.
-9. **Source-deferral prose**: card bodies containing deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考·參考 …near a source / `src/` / `docs/` / code or PDF path, "see source / refer to source"). These violate self-containment (Card splitting Rule 5) — the reader is told to go read the source instead of being told what the thing is. Reported as rewrite candidates; the script does not auto-fix. (Deterministic word match only — the deeper "names nothing specific / whole-file pointer" case is caught by the Claude-side check below.)
+9. **Source-deferral prose**: card bodies containing deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考·參考 …near a source / `src/` / `docs/` / code or PDF path, "see source / refer to source"). These violate self-containment (Card splitting Rule 5) — the reader is told to go read the source instead of being told what the thing is. Reported as rewrite candidates; the script does not auto-fix. (Deterministic word match — pairs with check 10 and the Claude-side check below.)
+10. **Vague source pointers**: a body "go deeper" pointer to a source file that (a) carries no line/page locator at all, or (b) gives a line range covering ≥90% of a file of ≥40 lines (effectively the whole file). The check *reads the referenced file's length*, so it triggers on the **shape of the pointer**, never on the noun "source" — a card legitimately discussing 「data source / 資料來源」 is untouched, and casual inline mentions (a backtick path with no `→` arrow), small files, and precise ranges are all spared. Reported as rewrite candidates: name the specific thing + cite exact lines/pages.
 
 **Claude-side check (semantic, not script-driven): missing links.** After the script's deterministic checks, Claude scans the wiki for cards whose prose mentions a concept covered by another existing card — by title, close paraphrase, or strong topical overlap — without being linked to it. Reports these as **missing-link candidates**. Fix path depends on what the user wants:
 - For one or two specific links, the user can just tell Claude "幫我把 X 連到 Y" and Claude does the edit directly (no workflow needed for a one-off).
 - For a related batch (e.g., all stem from the same source), re-invoke `extract` on that source; the missing connections show up as `[LINK]` items in its walkthrough.
 
-**Claude-side check (semantic): non-self-contained cards.** Beyond check 9's word match, Claude reads card bodies for the deeper failure — content deferred to a source without saying *what* it is, or "go deeper" pointers that name nothing specific or point at a whole file instead of precise lines/pages (e.g. `→ \`src/auth/jwt.ts:1-120\``). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card and turning the pointer into a named, precise, direct link — directly, or by re-invoking `extract` on the card's source.
+**Claude-side check (semantic): non-self-contained cards.** Checks 9–10 catch deferral *words* and structurally-vague *pointers*; Claude reads card bodies for the residual semantic failure neither can see — substance deferred to a source while the prose never says *what* the thing is, or a pointer that has a precise line range but whose description names nothing specific (e.g. `- 這段 → [src/auth/jwt.ts:60-85](...)` with no hint what "這段" is). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card and giving the pointer a meaningful name — directly, or by re-invoking `extract` on the card's source.
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 

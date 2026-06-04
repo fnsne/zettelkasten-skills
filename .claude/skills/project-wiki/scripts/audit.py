@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit a project wiki — run 9 deterministic health checks.
+"""Audit a project wiki — run 10 deterministic health checks.
 
 Reports go to stdout. Unless --no-write is passed, also writes:
   wiki/_meta/orphans.md
@@ -41,6 +41,119 @@ SOURCE_HINT_RE = re.compile(
     r"|\.tsx?|\.jsx?|\.py|\.go|\.java|\.pdf)",
     re.IGNORECASE,
 )
+
+# Vague-source-pointer detection (Card splitting Rule 5): a body "go deeper"
+# pointer must name a precise location, not the whole file. This is structural
+# (it reads the referenced file's length), so it triggers on neither the noun
+# "source" nor any domain wording — only on the shape of the pointer itself.
+MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
+BACKTICK_RE = re.compile(r"`([^`]+)`")
+LINE_RANGE_RE = re.compile(r":\s*(\d+)\s*-\s*(\d+)")
+LOCATOR_RE = re.compile(
+    r":\s*\d+"                                   # :42 or :42-58
+    r"|p\.?\s*\d+|pages?\s+\d+"                   # p.4 / p4 / page 4 / pages 4
+    r"|第\s*\d+\s*[-–~]?\s*\d*\s*頁",             # 第4頁 / 第4-6頁
+    re.IGNORECASE,
+)
+CODE_EXT = {
+    "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "java", "rb", "rs",
+    "c", "cc", "cpp", "h", "hpp", "cs", "php", "kt", "swift", "scala", "sql",
+    "sh", "bash", "yaml", "yml", "json", "toml", "ini", "xml", "html", "css",
+    "scss", "vue", "svelte",
+}
+DOC_EXT = {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "csv", "txt"}
+SOURCE_DIR_RE = re.compile(r"(^|/)(src|docs|meetings|ref|app|lib|tests?|internal|pkg|cmd)/")
+WHOLE_FILE_MIN_LINES = 40   # below this, "whole file" isn't hard to navigate
+WHOLE_FILE_RATIO = 0.9      # a range covering >=90% of the file is effectively whole-file
+
+
+def _path_ext(path: str) -> str:
+    base = path.split(":")[0].split("#")[0].strip()
+    m = re.search(r"\.([a-z0-9]+)$", base, re.IGNORECASE)
+    return m.group(1).lower() if m else ""
+
+
+def _is_source_path(path: str) -> bool:
+    base = path.split(":")[0].split("#")[0].strip()
+    if base.endswith(".md"):          # cards / _root / ref notes are not line-addressable sources
+        return False
+    ext = _path_ext(base)
+    return ext in CODE_EXT or ext in DOC_EXT or bool(SOURCE_DIR_RE.search(base))
+
+
+def _line_count(fpath: Path) -> int | None:
+    try:
+        with fpath.open("r", encoding="utf-8", errors="ignore") as fh:
+            return sum(1 for _ in fh)
+    except OSError:
+        return None
+
+
+def _is_whole_file(text: str, fpath: Path) -> bool:
+    m = LINE_RANGE_RE.search(text)
+    if not m or _path_ext(str(fpath)) in DOC_EXT or not fpath.exists():
+        return False
+    total = _line_count(fpath)
+    if not total or total < WHOLE_FILE_MIN_LINES:
+        return False
+    covered = int(m.group(2)) - int(m.group(1)) + 1
+    return covered >= total * WHOLE_FILE_RATIO
+
+
+def check_vague_source_pointers(cards, wiki_root: Path):
+    """Body source pointers that point at a whole file or carry no locator.
+
+    Catches the Rule-5 failure that the word check (check 9) can't see: a
+    "go deeper" pointer whose line range spans (almost) the entire file, or a
+    link to a source file with no line/page locator at all. Reads the target
+    file to judge whole-file coverage, so it never fires on the word "source".
+    """
+    project_root = wiki_root.parent
+    cards_dir = wiki_root / "cards"
+    out = []
+    seen = set()
+
+    def add(cid, lineno, kind, snippet):
+        key = (cid, lineno, kind)
+        if key not in seen:
+            seen.add(key)
+            out.append((cid, lineno, kind, snippet))
+
+    for c in cards:
+        for i, raw in enumerate(c.body.splitlines(), 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            snippet = line if len(line) <= 60 else line[:57] + "..."
+
+            # Markdown links to a source file are deliberate pointers; by skill
+            # convention the line/page locator lives in the link TEXT.
+            for m in MD_LINK_RE.finditer(line):
+                text, href = m.group(1), m.group(2).split("#")[0].strip()
+                if not _is_source_path(href):
+                    continue
+                fpath = (cards_dir / href).resolve()
+                # Located if the line/page sits in the link text OR right next to
+                # it on the same line — either way the reader can find the spot.
+                if not LOCATOR_RE.search(text) and not LOCATOR_RE.search(line):
+                    add(c.id, i, "no-locator", snippet)
+                elif _is_whole_file(text, fpath):
+                    add(c.id, i, "whole-file", snippet)
+
+            # Backtick paths: flag whole-file ranges always; flag a locator-less
+            # path only when the line is a nav pointer (has the → arrow), so
+            # casual inline mentions like `config/app.yaml` are left alone.
+            for m in BACKTICK_RE.finditer(line):
+                span = m.group(1).strip()
+                if not _is_source_path(span):
+                    continue
+                fpath = (project_root / span.split(":")[0].strip()).resolve()
+                if LOCATOR_RE.search(span):
+                    if _is_whole_file(span, fpath):
+                        add(c.id, i, "whole-file", snippet)
+                elif "→" in line:
+                    add(c.id, i, "no-locator", snippet)
+    return out
 
 
 def inline_targets(body: str) -> set[str]:
@@ -255,6 +368,7 @@ def main() -> int:
     single_sided, valid_pairs = check_conflicts(cards)
     inbox = check_inbox(wiki_root)
     deferrals = check_source_deferral(cards)
+    vague_ptrs = check_vague_source_pointers(cards, wiki_root)
 
     _section(1, "Orphans", orphans, lambda x: x)
     _section(2, "Inline-orphan (in frontmatter.links but never as inline link)",
@@ -270,6 +384,8 @@ def main() -> int:
     _section(8, "Inbox pending", inbox, lambda t: f"{t[0]} ({t[1]} days old)")
     _section(9, "Source-deferral prose (Rule 5: state the substance, don't say 詳見/參考 source)",
              deferrals, lambda t: f"{t[0]} line {t[1]} — 「{t[2]}」: {t[3]}")
+    _section(10, "Vague source pointers (Rule 5: name a precise location, not the whole file)",
+             vague_ptrs, lambda t: f"{t[0]} line {t[1]} — {t[2]}: {t[3]}")
 
     if not args.no_write:
         write_orphans_md(wiki_root, orphans)
@@ -278,7 +394,8 @@ def main() -> int:
         print(f"\nReports written to {wiki_root}/_meta/{{orphans,stale,conflicts}}.md")
 
     total_issues = (len(orphans) + len(inline_orphans) + len(dead_ends) + len(stale)
-                    + len(oversized) + len(broken) + len(single_sided) + len(deferrals))
+                    + len(oversized) + len(broken) + len(single_sided) + len(deferrals)
+                    + len(vague_ptrs))
     return 1 if total_issues else 0
 
 
