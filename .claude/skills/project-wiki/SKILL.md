@@ -96,13 +96,9 @@ payload 的 stateless token。根據[當初的決策](./decision-jwt-vs-session.
 驗證請求格式,再交給 auth service 處理。簽發後,session 狀態追蹤交給
 [auth-session-mgmt](./auth-session-mgmt.md) 負責,並用
 [token rotation 策略](./security-token-rotation.md)降低洩漏風險。
-
-## 何時往下追
-- 為什麼選 JWT,不選 session → [decision-jwt-vs-session](./decision-jwt-vs-session.md)
-- session 怎麼配合 → [auth-session-mgmt](./auth-session-mgmt.md)
-- 簽發主流程實作 → [src/auth/jwt.ts:12-89](../../src/auth/jwt.ts)
-- 簽發欄位與壽命規格 → [docs/auth-spec.pdf p.4-6](../../docs/auth-spec.pdf)
 ```
+
+（這張卡的出處 `src/auth/jwt.ts:12-89`、`docs/auth-spec.pdf` p.4-6 都記在上方 `sources:` frontmatter——出處不在內文出現,內文只連相關卡片。）
 
 **Required fields**: `id`, `created`, `sources` (can be empty list), `links` (can be empty list).
 **Recommended field**: `title` — the human-readable card title, mirroring the `# H1`. Lets Obsidian and similar tools show the concept name instead of the kebab-case `id` in backlinks, file explorer, and graph (see "Reading the wiki in Obsidian"). `slice` / `extract` / `fleet` write it on every new card.
@@ -110,15 +106,16 @@ payload 的 stateless token。根據[當初的決策](./decision-jwt-vs-session.
 **Optional sections**: `## 前提與局限` (when the card's content is a claim/decision — record the assumptions it rests on, and when it would need re-evaluation), `## 衝突與爭議` (narrative explanation of disagreements, pairs with `conflicts:` frontmatter).
 **Forbidden**: `type` field. A card's role (atomic / 主題卡 / decision / claim) is emergent from content, not declared.
 
-### Three layers of links
+### Two layers of links
 
 | Layer | Where | Purpose | Audience |
 |---|---|---|---|
 | `frontmatter.links` | YAML (list of card ids) | Machine-readable index; used by `audit` and by `extract`'s `[LINK]` items; powers backlinks | Tooling |
-| Inline `[text](./other-card.md)` | Within prose | The card reads as continuous narrative, with concepts linking to their definitions; clickable in any markdown viewer | Humans + Claude reading the card |
-| "何時往下追" section | End of card | Explicit navigation hints — "for X go to Y" | Claude during query-time traversal |
+| Inline `[text](./other-card.md)` | Within prose (摘要 / 內容, including bullet lists) | The card reads as continuous narrative, with concepts linking to their definitions; clickable in any markdown viewer. This is also the only navigation layer — "往下追" means following these links to the next related **card** | Humans + Claude reading the card |
 
-All three should exist on most cards. Frontmatter `links` should be a superset of (or equal to) the cards mentioned inline.
+Both should exist on most cards. Frontmatter `links` should be a superset of (or equal to) the cards mentioned inline.
+
+**Links point card→card only.** A source file is never a link target in the body. The card is the detail distilled *from* its source, so the source is **provenance** — recorded in `sources:` frontmatter (with precise lines/pages for traceability), not a place the reader navigates *to*. There is no separate navigation section; the description and its bullet points already carry the "for X go to card Y" hints via inline links.
 
 ### Relative path conventions
 
@@ -129,7 +126,7 @@ Cards live in `wiki/cards/`. Common link targets and their relative paths:
 | Another card | `./other-card.md` |
 | `_root.md` | `../_root.md` |
 | A `ref/` item | `../ref/2026-05-20-架構討論.md` |
-| Code in `src/` | `../../src/auth/jwt.ts` — goes in `sources:`, and when a card points readers to it for "go deeper", write it as a **direct link** in `## 何時往下追` (per Rule 5), not a bare backtick path |
+| Code in `src/` | `../../src/auth/jwt.ts` — recorded in `sources:` frontmatter (provenance) only; **never linked in the body**. The body links card→card. |
 
 From `_root.md` (which lives in `wiki/`), links into `cards/` look like `./cards/auth-overview.md`.
 
@@ -150,10 +147,15 @@ When extracting cards, apply these rules. They make inline linking possible.
 
 **Rule 4 — When in doubt, split.** Two concepts in one card means neither can be referenced cleanly. Splitting is cheap; merging via inline links is free.
 
-**Rule 5 — Self-contained prose; never defer the substance to a source.** A reader must grasp the concept from the card alone, without opening any source file. **Forbidden in card prose**: deferral words like 「詳見 / 詳閱 / 參見 / 參照 / (請)參考 … source / 原始檔 / 原文 / `src/…` / `docs/…`」 or "see source / refer to source" used *in place of* explaining. The telltale failure (the thing to avoid): after reading the card the reader still doesn't know *what the thing is* and would have to open sources one-by-one to find out. Instead, **state the actual content in the card**. A source reference is only a "go deeper for the full detail" pointer — and when you add one it MUST (a) name in plain words *what specifically lives there*, and (b) point to the **exact** location (precise lines/pages, not the whole file), written as a direct link.
+**Rule 5 — Self-contained prose; the source is provenance, not a destination.** A reader must grasp the concept from the card alone, without opening any source file. The card is the detail distilled *from* its source, so the source is **where the card came from** — recorded in `sources:` frontmatter, never linked in the body and never used as a "go read it there" substitute for explaining. Two things follow:
 
-✅ `- active key 選擇與 24h rotation overlap → [src/auth/jwt.ts:60-85](../../src/auth/jwt.ts)`
-❌ `- rotation 細節詳見 src/auth/jwt.ts`  ❌ `- keyring 機制 → `src/auth/jwt.ts:1-120`` (whole-file, names nothing specific)  ❌ `各欄位定義請參考 source`
+- **Forbidden in card prose**: deferral words like 「詳見 / 詳閱 / 參見 / 參照 / (請)參考 … source / 原始檔 / 原文」 or "see source / refer to source" used *in place of* explaining. Telltale failure to avoid: after reading the card the reader still doesn't know *what the thing is* and would have to open the source to find out. **State the actual content in the card.**
+- **No source link in the body.** "往下追" follows inline links to the next related **card**, not back to raw material. A source file never appears as a body link or `→` pointer; its location lives in `sources:` frontmatter (keep precise lines/pages there for traceability). Mentioning a path in prose as plain text is fine; linking it as a navigation target is not.
+
+✅ 內文把概念講完,相關概念用 inline 連到別張卡:`…採 [stateless 設計](./decision-jwt-vs-session.md)…`;出處 `src/auth/jwt.ts:60-85` 寫在 `sources:`。
+❌ `- rotation 細節詳見 src/auth/jwt.ts`  ❌ `- keyring 機制 → [src/auth/jwt.ts:1-120](../../src/auth/jwt.ts)` (source 不該是內文導覽目標)  ❌ `各欄位定義請參考 source`
+
+> When a chunk of a source is itself one atomic unit (e.g. "120 個錯誤碼"), don't make a separate card that merely *describes* it: if that's the source's only content, just mention it where relevant; if the source also holds other concepts, extract that chunk **as one card**. Either way no "see the full list in source" body link is ever needed.
 
 ## Reading the wiki in Obsidian
 
@@ -295,7 +297,7 @@ Steps:
    - "They asked me to adjust X, so I'll just apply it and move on" — re-display the adjusted draft and wait.
    - "It's obviously what they want" — show it and let them say so.
 
-   **Self-containment check before showing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft prose — including `## 何時往下追` — for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) source pointers that name nothing specific or point at a whole file (e.g. `→ \`src/auth/jwt.ts:1-120\`` covering the entire file). If found, **rewrite before displaying**: put the actual substance in the card, and turn any source pointer into a named, precise, direct link (what's there + exact lines/pages + `[…](../../src/…)`). Never show or write a card that makes the reader open a source just to learn what the concept is.
+   **Self-containment check before showing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft body for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) **any source file linked or `→`-pointed in the body** (e.g. `[…](../../src/…)` or `→ \`src/auth/jwt.ts:1-120\``). If found, **rewrite before displaying**: state the substance in the card, move the source location to the `sources:` frontmatter (provenance), and make sure every body link points card→card. Never show or write a card that defers the reader to a source or uses a source as a navigation target.
 
    Display format by type:
 
@@ -316,11 +318,9 @@ Steps:
    JWT-based stateless auth flow used by /api routes.
 
    ## 內容
-   [auth-overview](./auth-overview.md) 採 JWT 作為 access token...
-
-   ## 何時往下追
-   - refresh 流程 → [auth-refresh-token](./auth-refresh-token.md)
-   - 為何選 JWT → [decision-jwt-vs-session](./decision-jwt-vs-session.md)
+   [auth-overview](./auth-overview.md) 採 JWT 作為 access token,登入後簽發。
+   - refresh 由 [auth-refresh-token](./auth-refresh-token.md) 負責
+   - 選型理由見 [decision-jwt-vs-session](./decision-jwt-vs-session.md)
 
    這張卡片如何？
    ```
@@ -360,7 +360,7 @@ Steps:
    ```
    [6/8] [SECTION?] decision-jwt-vs-session — add 前提與局限
 
-   在 ## 何時往下追 之前插入:
+   在 ## 內容 之後插入:
       ## 前提與局限
       本決策前提是 token 生命週期 < 1hr。
       若改長期 token,需重評 revocation 機制。
@@ -424,20 +424,20 @@ Checks performed by the script:
 
 1. **Orphans**: cards with zero inbound `frontmatter.links` from any other card. Likely candidates for inline-linking from a 主題卡.
 2. **Inline-orphan**: card appears in some `frontmatter.links` but **never** appears as an inline markdown link in any other card's prose. Means: indexed but not narratively woven. Propose where to weave it in.
-3. **Dead-end cards**: cards with zero outbound links AND no `## 何時往下追` section. Suggest follow-ups.
+3. **Dead-end cards**: cards with zero outbound card links (no `frontmatter.links` and no inline `[...](./other.md)`). Suggest related cards to link.
 4. **Stale**: source file `mtime` is newer than card `updated` field. Listed in `_meta/stale.md` for human review. Do not auto-update — the card author needs to decide what changed.
 5. **Oversized cards**: any card body over ~2000 characters (≈ 500 tokens). Probably violates one-concept-per-card. Suggest split.
 6. **Broken links**: an inline `[text](./xyz.md)` or `links: [xyz]` where no `xyz.md` exists in `cards/`.
 7. **Single-sided conflicts**: card A has `conflicts: [B]` but card B does not list A. Conflict edges must be bidirectional — propose fixing.
 8. **Inbox pending**: list files currently in `wiki/_inbox/` with their age (days since file mtime). Purely informational — does not push the user to process them.
 9. **Source-deferral prose**: card bodies containing deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考·參考 …near a source / `src/` / `docs/` / code or PDF path, "see source / refer to source"). These violate self-containment (Card splitting Rule 5) — the reader is told to go read the source instead of being told what the thing is. Reported as rewrite candidates; the script does not auto-fix. (Deterministic word match — pairs with check 10 and the Claude-side check below.)
-10. **Vague source pointers**: a body "go deeper" pointer to a source file that (a) carries no line/page locator at all, or (b) gives a line range covering ≥90% of a file of ≥40 lines (effectively the whole file). The check *reads the referenced file's length*, so it triggers on the **shape of the pointer**, never on the noun "source" — a card legitimately discussing 「data source / 資料來源」 is untouched, and casual inline mentions (a backtick path with no `→` arrow), small files, and precise ranges are all spared. Reported as rewrite candidates: name the specific thing + cite exact lines/pages.
+10. **Source linked in body**: a source file used as a navigation target in the card body — a markdown link whose target is a source file (`[…](../../src/…)`, code/doc path), or a `→` pointer to a backtick source path. Source belongs in `sources:` frontmatter (provenance); the body links card→card (Rule 5). Triggers on the **shape of the link**, never on the noun "source" — a card discussing 「data source / 資料來源」, or a bare backtick path mentioned in prose (no link, no `→`), is untouched. Reported as rewrite candidates: state the substance, move the location to `sources:`.
 
 **Claude-side check (semantic, not script-driven): missing links.** After the script's deterministic checks, Claude scans the wiki for cards whose prose mentions a concept covered by another existing card — by title, close paraphrase, or strong topical overlap — without being linked to it. Reports these as **missing-link candidates**. Fix path depends on what the user wants:
 - For one or two specific links, the user can just tell Claude "幫我把 X 連到 Y" and Claude does the edit directly (no workflow needed for a one-off).
 - For a related batch (e.g., all stem from the same source), re-invoke `extract` on that source; the missing connections show up as `[LINK]` items in its walkthrough.
 
-**Claude-side check (semantic): non-self-contained cards.** Checks 9–10 catch deferral *words* and structurally-vague *pointers*; Claude reads card bodies for the residual semantic failure neither can see — substance deferred to a source while the prose never says *what* the thing is, or a pointer that has a precise line range but whose description names nothing specific (e.g. `- 這段 → [src/auth/jwt.ts:60-85](...)` with no hint what "這段" is). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card and giving the pointer a meaningful name — directly, or by re-invoking `extract` on the card's source.
+**Claude-side check (semantic): non-self-contained cards.** Checks 9–10 catch deferral *words* and source *links* in the body; Claude reads card bodies for the residual semantic failure neither can see — substance deferred to a source while the prose never says *what* the thing is, even with no trigger word or link (e.g. a card that gestures at "the validation logic" without describing it). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card — directly, or by re-invoking `extract` on the card's source.
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 
@@ -478,7 +478,7 @@ Steps:
 
 1. Traverse the wiki from `_root.md` downward (the same scan as `extract` step 2's link-target search).
 2. Collect related cards — same concept / nearby concept / candidate 主題卡 — and related source documents.
-3. For each related card, state WHERE the link should go and in which direction(s): frontmatter `links:`, inline in `## 摘要` (definition-level mention), `## 何時往下追` (navigation hint), or a 主題卡's `## 子題導覽`. For each related document, note it goes under `sources:`.
+3. For each related card, state WHERE the link should go and in which direction(s): frontmatter `links:`, inline in `## 摘要` (definition-level mention), inline in `## 內容` (including a bullet in its list), or a 主題卡's `## 子題導覽`. For each related document, note it goes under `sources:` (provenance — never a body link).
 4. Present the grouped suggestions:
 
    ```
@@ -486,7 +486,7 @@ Steps:
    卡片：
      - auth-overview            → 掛在它的「子題導覽」(主題卡)，雙向
      - decision-jwt-vs-session  → 摘要內聯一句「依當初決策…」
-     - security-token-rotation  → 「何時往下追」放一條
+     - security-token-rotation  → 內容裡放一條 inline 連結
    文件：
      - docs/auth-spec.pdf p.4-6 → 進 sources:
    ```

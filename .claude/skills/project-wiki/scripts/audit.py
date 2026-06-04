@@ -22,7 +22,6 @@ import frontmatter as fm  # noqa: E402
 OVERSIZED_CHAR_THRESHOLD = 2000  # ~500 tokens for mixed CJK/English
 
 INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\(\./([^)]+?)\.md\)")
-NAV_SECTION_RE = re.compile(r"^##\s+何時往下追\s*$", re.MULTILINE)
 
 # Source-deferral detection (Card splitting Rule 5): card prose must be
 # self-contained, not "go read the source". Strong cues are almost always
@@ -42,19 +41,13 @@ SOURCE_HINT_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Vague-source-pointer detection (Card splitting Rule 5): a body "go deeper"
-# pointer must name a precise location, not the whole file. This is structural
-# (it reads the referenced file's length), so it triggers on neither the noun
-# "source" nor any domain wording — only on the shape of the pointer itself.
+# Source-in-body detection (Card splitting Rule 5): a source file must not be a
+# navigation target in the card body — source is provenance (`sources:`
+# frontmatter), and body links go card->card. This triggers on the shape of the
+# link, never on the noun "source", so a card discussing "data source / 資料來源"
+# or a bare backtick path mentioned in prose is untouched.
 MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 BACKTICK_RE = re.compile(r"`([^`]+)`")
-LINE_RANGE_RE = re.compile(r":\s*(\d+)\s*-\s*(\d+)")
-LOCATOR_RE = re.compile(
-    r":\s*\d+"                                   # :42 or :42-58
-    r"|p\.?\s*\d+|pages?\s+\d+"                   # p.4 / p4 / page 4 / pages 4
-    r"|第\s*\d+\s*[-–~]?\s*\d*\s*頁",             # 第4頁 / 第4-6頁
-    re.IGNORECASE,
-)
 CODE_EXT = {
     "ts", "tsx", "js", "jsx", "mjs", "cjs", "py", "go", "java", "rb", "rs",
     "c", "cc", "cpp", "h", "hpp", "cs", "php", "kt", "swift", "scala", "sql",
@@ -63,8 +56,6 @@ CODE_EXT = {
 }
 DOC_EXT = {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "csv", "txt"}
 SOURCE_DIR_RE = re.compile(r"(^|/)(src|docs|meetings|ref|app|lib|tests?|internal|pkg|cmd)/")
-WHOLE_FILE_MIN_LINES = 40   # below this, "whole file" isn't hard to navigate
-WHOLE_FILE_RATIO = 0.9      # a range covering >=90% of the file is effectively whole-file
 
 
 def _path_ext(path: str) -> str:
@@ -81,35 +72,14 @@ def _is_source_path(path: str) -> bool:
     return ext in CODE_EXT or ext in DOC_EXT or bool(SOURCE_DIR_RE.search(base))
 
 
-def _line_count(fpath: Path) -> int | None:
-    try:
-        with fpath.open("r", encoding="utf-8", errors="ignore") as fh:
-            return sum(1 for _ in fh)
-    except OSError:
-        return None
+def check_source_in_body(cards):
+    """Source files used as navigation targets in the card body (Rule 5).
 
-
-def _is_whole_file(text: str, fpath: Path) -> bool:
-    m = LINE_RANGE_RE.search(text)
-    if not m or _path_ext(str(fpath)) in DOC_EXT or not fpath.exists():
-        return False
-    total = _line_count(fpath)
-    if not total or total < WHOLE_FILE_MIN_LINES:
-        return False
-    covered = int(m.group(2)) - int(m.group(1)) + 1
-    return covered >= total * WHOLE_FILE_RATIO
-
-
-def check_vague_source_pointers(cards, wiki_root: Path):
-    """Body source pointers that point at a whole file or carry no locator.
-
-    Catches the Rule-5 failure that the word check (check 9) can't see: a
-    "go deeper" pointer whose line range spans (almost) the entire file, or a
-    link to a source file with no line/page locator at all. Reads the target
-    file to judge whole-file coverage, so it never fires on the word "source".
+    Source is provenance — it lives in `sources:` frontmatter, and the body
+    links card->card. Flags a markdown link whose target is a source file, and a
+    `→` pointer to a backtick source path. A bare backtick path mentioned in
+    prose (no link, no arrow) is fine, so casual mentions are left alone.
     """
-    project_root = wiki_root.parent
-    cards_dir = wiki_root / "cards"
     out = []
     seen = set()
 
@@ -126,33 +96,18 @@ def check_vague_source_pointers(cards, wiki_root: Path):
                 continue
             snippet = line if len(line) <= 60 else line[:57] + "..."
 
-            # Markdown links to a source file are deliberate pointers; by skill
-            # convention the line/page locator lives in the link TEXT.
+            # A markdown link to a source file is always a body navigation link.
             for m in MD_LINK_RE.finditer(line):
-                text, href = m.group(1), m.group(2).split("#")[0].strip()
-                if not _is_source_path(href):
-                    continue
-                fpath = (cards_dir / href).resolve()
-                # Located if the line/page sits in the link text OR right next to
-                # it on the same line — either way the reader can find the spot.
-                if not LOCATOR_RE.search(text) and not LOCATOR_RE.search(line):
-                    add(c.id, i, "no-locator", snippet)
-                elif _is_whole_file(text, fpath):
-                    add(c.id, i, "whole-file", snippet)
+                href = m.group(2).split("#")[0].strip()
+                if _is_source_path(href):
+                    add(c.id, i, "md-link", snippet)
 
-            # Backtick paths: flag whole-file ranges always; flag a locator-less
-            # path only when the line is a nav pointer (has the → arrow), so
-            # casual inline mentions like `config/app.yaml` are left alone.
-            for m in BACKTICK_RE.finditer(line):
-                span = m.group(1).strip()
-                if not _is_source_path(span):
-                    continue
-                fpath = (project_root / span.split(":")[0].strip()).resolve()
-                if LOCATOR_RE.search(span):
-                    if _is_whole_file(span, fpath):
-                        add(c.id, i, "whole-file", snippet)
-                elif "→" in line:
-                    add(c.id, i, "no-locator", snippet)
+            # A `→ `src/...`` arrow pointer to a source path is a nav pointer;
+            # a backtick path without the arrow is just an inline mention.
+            if "→" in line:
+                for m in BACKTICK_RE.finditer(line):
+                    if _is_source_path(m.group(1).strip()):
+                        add(c.id, i, "arrow-pointer", snippet)
     return out
 
 
@@ -186,8 +141,7 @@ def check_dead_ends(cards):
     out = []
     for c in cards:
         has_links = bool(c.frontmatter.get("links")) or bool(inline_targets(c.body))
-        has_nav = bool(NAV_SECTION_RE.search(c.body))
-        if not has_links and not has_nav:
+        if not has_links:
             out.append(c.id)
     return out
 
@@ -368,12 +322,12 @@ def main() -> int:
     single_sided, valid_pairs = check_conflicts(cards)
     inbox = check_inbox(wiki_root)
     deferrals = check_source_deferral(cards)
-    vague_ptrs = check_vague_source_pointers(cards, wiki_root)
+    body_sources = check_source_in_body(cards)
 
     _section(1, "Orphans", orphans, lambda x: x)
     _section(2, "Inline-orphan (in frontmatter.links but never as inline link)",
              inline_orphans, lambda x: x)
-    _section(3, "Dead-end cards (no outbound links, no 何時往下追)",
+    _section(3, "Dead-end cards (no outbound card links)",
              dead_ends, lambda x: x)
     _section(4, "Stale (source mtime > card updated)",
              stale, lambda t: f"{t[0]} — source {t[1]} modified {t[2]}")
@@ -384,8 +338,8 @@ def main() -> int:
     _section(8, "Inbox pending", inbox, lambda t: f"{t[0]} ({t[1]} days old)")
     _section(9, "Source-deferral prose (Rule 5: state the substance, don't say 詳見/參考 source)",
              deferrals, lambda t: f"{t[0]} line {t[1]} — 「{t[2]}」: {t[3]}")
-    _section(10, "Vague source pointers (Rule 5: name a precise location, not the whole file)",
-             vague_ptrs, lambda t: f"{t[0]} line {t[1]} — {t[2]}: {t[3]}")
+    _section(10, "Source linked in body (Rule 5: source is provenance in sources:, body links card→card)",
+             body_sources, lambda t: f"{t[0]} line {t[1]} — {t[2]}: {t[3]}")
 
     if not args.no_write:
         write_orphans_md(wiki_root, orphans)
@@ -395,7 +349,7 @@ def main() -> int:
 
     total_issues = (len(orphans) + len(inline_orphans) + len(dead_ends) + len(stale)
                     + len(oversized) + len(broken) + len(single_sided) + len(deferrals)
-                    + len(vague_ptrs))
+                    + len(body_sources))
     return 1 if total_issues else 0
 
 
