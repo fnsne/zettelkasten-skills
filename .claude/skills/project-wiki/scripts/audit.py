@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit a project wiki — run 8 deterministic health checks.
+"""Audit a project wiki — run 9 deterministic health checks.
 
 Reports go to stdout. Unless --no-write is passed, also writes:
   wiki/_meta/orphans.md
@@ -23,6 +23,24 @@ OVERSIZED_CHAR_THRESHOLD = 2000  # ~500 tokens for mixed CJK/English
 
 INLINE_LINK_RE = re.compile(r"\[([^\]]+)\]\(\./([^)]+?)\.md\)")
 NAV_SECTION_RE = re.compile(r"^##\s+何時往下追\s*$", re.MULTILINE)
+
+# Source-deferral detection (Card splitting Rule 5): card prose must be
+# self-contained, not "go read the source". Strong cues are almost always
+# deferrals; the weak cue (參考) is only flagged when a source hint sits on the
+# same line, to keep false positives down. This is a word match only — the
+# "names nothing specific / whole-file pointer" case is left to the Claude-side
+# semantic check documented in SKILL.md.
+DEFER_STRONG_RE = re.compile(
+    r"(詳見|詳閱|詳情請?[見參]|細節請?[見參]|參見|參照|見\s*原始|見\s*source"
+    r"|see\s+(?:the\s+)?source|refer\s+to\s+(?:the\s+)?source)",
+    re.IGNORECASE,
+)
+DEFER_WEAK_RE = re.compile(r"請?參考")
+SOURCE_HINT_RE = re.compile(
+    r"(source|原始檔|原始碼|原文|程式碼|src/|docs/|meetings/|ref/"
+    r"|\.tsx?|\.jsx?|\.py|\.go|\.java|\.pdf)",
+    re.IGNORECASE,
+)
 
 
 def inline_targets(body: str) -> set[str]:
@@ -122,6 +140,30 @@ def check_conflicts(cards):
     return single_sided, sorted(valid_pairs)
 
 
+def check_source_deferral(cards):
+    """Card prose that defers substance to a source instead of stating it.
+
+    Flags lines using a strong deferral cue (詳見/參見/參照/see source…), or the
+    weak cue 參考 when a source hint is on the same line. Skips headings, the
+    sources/links frontmatter is not in body so not scanned.
+    """
+    out = []
+    for c in cards:
+        for i, raw in enumerate(c.body.splitlines(), 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            hit = None
+            if DEFER_STRONG_RE.search(line):
+                hit = DEFER_STRONG_RE.search(line).group(0)
+            elif DEFER_WEAK_RE.search(line) and SOURCE_HINT_RE.search(line):
+                hit = DEFER_WEAK_RE.search(line).group(0)
+            if hit:
+                snippet = line if len(line) <= 60 else line[:57] + "..."
+                out.append((c.id, i, hit, snippet))
+    return out
+
+
 def check_inbox(wiki_root: Path):
     inbox = wiki_root / "_inbox"
     if not inbox.is_dir():
@@ -212,6 +254,7 @@ def main() -> int:
     broken = check_broken_links(cards)
     single_sided, valid_pairs = check_conflicts(cards)
     inbox = check_inbox(wiki_root)
+    deferrals = check_source_deferral(cards)
 
     _section(1, "Orphans", orphans, lambda x: x)
     _section(2, "Inline-orphan (in frontmatter.links but never as inline link)",
@@ -225,6 +268,8 @@ def main() -> int:
     _section(6, "Broken links", broken, lambda t: f"{t[0]}: {t[1]}")
     _section(7, "Single-sided conflicts", single_sided, lambda t: f"{t[0]}: {t[1]}")
     _section(8, "Inbox pending", inbox, lambda t: f"{t[0]} ({t[1]} days old)")
+    _section(9, "Source-deferral prose (Rule 5: state the substance, don't say 詳見/參考 source)",
+             deferrals, lambda t: f"{t[0]} line {t[1]} — 「{t[2]}」: {t[3]}")
 
     if not args.no_write:
         write_orphans_md(wiki_root, orphans)
@@ -233,7 +278,7 @@ def main() -> int:
         print(f"\nReports written to {wiki_root}/_meta/{{orphans,stale,conflicts}}.md")
 
     total_issues = (len(orphans) + len(inline_orphans) + len(dead_ends) + len(stale)
-                    + len(oversized) + len(broken) + len(single_sided))
+                    + len(oversized) + len(broken) + len(single_sided) + len(deferrals))
     return 1 if total_issues else 0
 
 

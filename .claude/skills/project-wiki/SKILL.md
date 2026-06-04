@@ -100,8 +100,8 @@ payload 的 stateless token。根據[當初的決策](./decision-jwt-vs-session.
 ## 何時往下追
 - 為什麼選 JWT,不選 session → [decision-jwt-vs-session](./decision-jwt-vs-session.md)
 - session 怎麼配合 → [auth-session-mgmt](./auth-session-mgmt.md)
-- 實作細節 → `src/auth/jwt.ts:12-89`
-- 規格原文 → `docs/auth-spec.pdf` p.4-6
+- 簽發主流程實作 → [src/auth/jwt.ts:12-89](../../src/auth/jwt.ts)
+- 簽發欄位與壽命規格 → [docs/auth-spec.pdf p.4-6](../../docs/auth-spec.pdf)
 ```
 
 **Required fields**: `id`, `created`, `sources` (can be empty list), `links` (can be empty list).
@@ -129,7 +129,7 @@ Cards live in `wiki/cards/`. Common link targets and their relative paths:
 | Another card | `./other-card.md` |
 | `_root.md` | `../_root.md` |
 | A `ref/` item | `../ref/2026-05-20-架構討論.md` |
-| Code in `src/` | `../../src/auth/jwt.ts` (rarely linked inline; usually in `sources:`) |
+| Code in `src/` | `../../src/auth/jwt.ts` — goes in `sources:`, and when a card points readers to it for "go deeper", write it as a **direct link** in `## 何時往下追` (per Rule 5), not a bare backtick path |
 
 From `_root.md` (which lives in `wiki/`), links into `cards/` look like `./cards/auth-overview.md`.
 
@@ -149,6 +149,11 @@ When extracting cards, apply these rules. They make inline linking possible.
 - A meeting / PDF is **not** a card — it's a source. Extract the concepts inside it into multiple cards.
 
 **Rule 4 — When in doubt, split.** Two concepts in one card means neither can be referenced cleanly. Splitting is cheap; merging via inline links is free.
+
+**Rule 5 — Self-contained prose; never defer the substance to a source.** A reader must grasp the concept from the card alone, without opening any source file. **Forbidden in card prose**: deferral words like 「詳見 / 詳閱 / 參見 / 參照 / (請)參考 … source / 原始檔 / 原文 / `src/…` / `docs/…`」 or "see source / refer to source" used *in place of* explaining. The telltale failure (the thing to avoid): after reading the card the reader still doesn't know *what the thing is* and would have to open sources one-by-one to find out. Instead, **state the actual content in the card**. A source reference is only a "go deeper for the full detail" pointer — and when you add one it MUST (a) name in plain words *what specifically lives there*, and (b) point to the **exact** location (precise lines/pages, not the whole file), written as a direct link.
+
+✅ `- active key 選擇與 24h rotation overlap → [src/auth/jwt.ts:60-85](../../src/auth/jwt.ts)`
+❌ `- rotation 細節詳見 src/auth/jwt.ts`  ❌ `- keyring 機制 → `src/auth/jwt.ts:1-120`` (whole-file, names nothing specific)  ❌ `各欄位定義請參考 source`
 
 ## Reading the wiki in Obsidian
 
@@ -196,7 +201,7 @@ Mechanical, deterministic operations live in Python scripts under `.claude/skill
 
 | Operation | Implementation |
 |---|---|
-| Audit (all 8 health checks + `_meta/` writes) | `scripts/audit.py` |
+| Audit (all 9 health checks + `_meta/` writes) | `scripts/audit.py` |
 | Mark a bidirectional conflict between two cards | `scripts/conflict-mark.py` |
 | Promote an inbox file to `ref/` and rewrite card `sources:` paths | `scripts/inbox-promote.py` |
 | Concept identification, contradiction detection, link proposals, query traversal | Claude |
@@ -289,6 +294,8 @@ Steps:
    - "I'll show the draft and write it in the same message" — showing ≠ confirming; the user gets no turn to react.
    - "They asked me to adjust X, so I'll just apply it and move on" — re-display the adjusted draft and wait.
    - "It's obviously what they want" — show it and let them say so.
+
+   **Self-containment check before showing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft prose — including `## 何時往下追` — for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) source pointers that name nothing specific or point at a whole file (e.g. `→ \`src/auth/jwt.ts:1-120\`` covering the entire file). If found, **rewrite before displaying**: put the actual substance in the card, and turn any source pointer into a named, precise, direct link (what's there + exact lines/pages + `[…](../../src/…)`). Never show or write a card that makes the reader open a source just to learn what the concept is.
 
    Display format by type:
 
@@ -409,7 +416,7 @@ Steps:
 python .claude/skills/project-wiki/scripts/audit.py
 ```
 
-The script runs 8 deterministic checks against `wiki/` and (unless `--no-write` is passed) writes report files to `wiki/_meta/orphans.md`, `wiki/_meta/stale.md`, and `wiki/_meta/conflicts.md`. Exit code is nonzero if any issues found.
+The script runs 9 deterministic checks against `wiki/` and (unless `--no-write` is passed) writes report files to `wiki/_meta/orphans.md`, `wiki/_meta/stale.md`, and `wiki/_meta/conflicts.md`. Exit code is nonzero if any issues found.
 
 After it runs, **Claude reads the stdout output and summarises findings to the user**, then proposes fixes — typically by re-invoking `extract` (which handles new cards + `[LINK]` items), `promote` for 主題卡, or `conflict-mark.py` for marking conflicts. The script itself never auto-fixes.
 
@@ -423,10 +430,13 @@ Checks performed by the script:
 6. **Broken links**: an inline `[text](./xyz.md)` or `links: [xyz]` where no `xyz.md` exists in `cards/`.
 7. **Single-sided conflicts**: card A has `conflicts: [B]` but card B does not list A. Conflict edges must be bidirectional — propose fixing.
 8. **Inbox pending**: list files currently in `wiki/_inbox/` with their age (days since file mtime). Purely informational — does not push the user to process them.
+9. **Source-deferral prose**: card bodies containing deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考·參考 …near a source / `src/` / `docs/` / code or PDF path, "see source / refer to source"). These violate self-containment (Card splitting Rule 5) — the reader is told to go read the source instead of being told what the thing is. Reported as rewrite candidates; the script does not auto-fix. (Deterministic word match only — the deeper "names nothing specific / whole-file pointer" case is caught by the Claude-side check below.)
 
 **Claude-side check (semantic, not script-driven): missing links.** After the script's deterministic checks, Claude scans the wiki for cards whose prose mentions a concept covered by another existing card — by title, close paraphrase, or strong topical overlap — without being linked to it. Reports these as **missing-link candidates**. Fix path depends on what the user wants:
 - For one or two specific links, the user can just tell Claude "幫我把 X 連到 Y" and Claude does the edit directly (no workflow needed for a one-off).
 - For a related batch (e.g., all stem from the same source), re-invoke `extract` on that source; the missing connections show up as `[LINK]` items in its walkthrough.
+
+**Claude-side check (semantic): non-self-contained cards.** Beyond check 9's word match, Claude reads card bodies for the deeper failure — content deferred to a source without saying *what* it is, or "go deeper" pointers that name nothing specific or point at a whole file instead of precise lines/pages (e.g. `→ \`src/auth/jwt.ts:1-120\``). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card and turning the pointer into a named, precise, direct link — directly, or by re-invoking `extract` on the card's source.
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 
