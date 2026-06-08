@@ -287,7 +287,7 @@ Steps:
 
    On accept (the user replied approving *this* item): **apply the change** before moving on. Later items often link to earlier ones; writing the accepted item now means subsequent proposals can see the actual file state and use real inline links.
 
-   On edit / 調整: apply the user's modification to the draft, **re-display the full adjusted draft, and STOP again** — never write an adjusted draft in the same turn you adjusted it. Repeat (show → wait → reply) until the user approves or skips. "改一下然後直接寫下去" is the exact failure to avoid: every adjustment gets shown and re-confirmed first.
+   On edit / 調整: apply the user's modification to the draft, **re-display the full adjusted draft as a colour diff (see "Re-display after an adjustment — colour the change" below), and STOP again** — never write an adjusted draft in the same turn you adjusted it. Repeat (show → wait → reply) until the user approves or skips. "改一下然後直接寫下去" is the exact failure to avoid: every adjustment gets shown and re-confirmed first.
 
    On abort: stop. Items already written stay (atomic, complete on their own).
 
@@ -381,6 +381,40 @@ Steps:
 
    這個怎麼處理？可以只標起來、現在 reconcile 一邊或合併重寫、或判定不算真衝突。
    ```
+
+   **Re-display after an adjustment — colour the change.** When you re-display a draft *because the user just asked you to change something*, show the **whole** draft (full frontmatter + body — all the context, never only the changed lines) inside a ```` ```diff ```` fenced block, so the change stands out in colour against the unchanged surroundings. This is the one place the user is scanning a near-identical draft for the small thing that moved; the colour is what spares them from re-reading the whole card to find it.
+
+   - Diff against **the exact version the user last saw**, not against the source — only the user's latest requested change should light up. (If they make a further edit next turn, diff against *that* re-display.)
+   - Unchanged line → plain context line with **one leading space** (renders neutral). Replaced line → the old text as a `-` line (red) immediately followed by the new text as a `+` line (green). Pure insertion → `+` line; pure deletion → `-` line. Frontmatter counts — a changed `tags:` / `links:` / `title:` line gets marked too.
+   - Because the colour now carries "what changed", **don't also narrate the edits in prose** — the diff shows them. Just re-display and ask (then STOP, per the rule above).
+
+   This is the **re-display-after-adjustment path only**. The **first** time you show a `[NEW]` card there is no previous version to diff against — show it plainly per the `[NEW]` format above. `[EXPAND]` / `[LINK]` / `[SECTION?]` keep their first-display format too; but once the user asks to adjust any item, its re-display uses this colour-diff form.
+
+   Worked example — re-display after the user asked to lengthen the 摘要, make one link inline, and (consequently) sync `links:`:
+
+   ```diff
+     ---
+     id: auth-jwt-flow
+     title: JWT 簽發流程
+     tags: [auth, jwt]
+   - links: [auth-overview, decision-jwt-vs-session]
+   + links: [auth-overview, decision-jwt-vs-session, auth-refresh-token]
+     sources: [src/auth/jwt.ts:1-58]
+     created: 2026-06-08
+     ---
+
+     ## 摘要
+   - JWT 簽發流程負責簽發 token。
+   + JWT 簽發流程負責在登入後簽發帶 payload 的 stateless token。
+
+     ## 內容
+     [auth-overview](./auth-overview.md) 採 JWT 作為 access token，登入後簽發。
+   - - refresh 由 auth-refresh-token 負責
+   + - refresh 由 [auth-refresh-token](./auth-refresh-token.md) 負責
+     - 選型理由見 [decision-jwt-vs-session](./decision-jwt-vs-session.md)
+   ```
+
+   這樣可以嗎？(然後 STOP 等回覆)
 
 5. **For `[CONFLICT?]` items specifically**, map the user's intent to the right write:
    - Mark only ("標起來" / "標一下") → invoke `python .claude/skills/project-wiki/scripts/conflict-mark.py <card-a> <card-b> --description "<one-liner>"`. The script bidirectionally adds the conflict to both cards' `conflicts:` frontmatter and appends to `_meta/conflicts.md`. Do **not** modify either card's prose.
@@ -522,7 +556,7 @@ Steps:
 - **Interpreting natural-language replies in walk-through workflows**. When asking the user about a single proposal (e.g., "這張卡片如何？"), do not present a fixed `(y) / (e) / (s)` menu — interpret the reply by intent:
   - 採納 ("好", "可以", "沒問題", "寫吧", "yes"), **as a reply to the displayed draft** → apply the change as drafted. Approval the user gave *before* the draft was on screen (a map-level "y", a standing 「趕時間」) does not count — show the full content and wait for a fresh reply.
   - 跳過 ("跳過", "不要", "算了", "下一個", "skip") → don't apply; move on
-  - 具體修改 ("摘要改成 X", "link 拿掉 Y", "加個 tag Z") → apply the edit, re-display the full updated draft, ask again
+  - 具體修改 ("摘要改成 X", "link 拿掉 Y", "加個 tag Z") → apply the edit, re-display the full updated draft **as a colour diff** (per step 4 "Re-display after an adjustment — colour the change": whole draft inside a ```diff block, only the changed lines marked `-`/`+`), ask again
   - 中止 ("停", "全部不要了", "abort") → stop the workflow; already-applied items stay
   - 提問 / 不確定 ("為什麼這樣寫", "我不太懂") → discuss; do not apply yet
   - 模糊不清 → ask back for clarification, never guess
