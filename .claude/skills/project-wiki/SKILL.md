@@ -292,22 +292,25 @@ Steps:
    - `[CONFLICT?]` → `wiki/_drafts/<a>__<b>.conflict.md`: frontmatter `status: draft`; body = both sides' claims + the proposed mark.
    - Use the per-type content formats below as the draft body. Run the self-containment check (below) on every `[NEW]`/`[EXPAND]` body **before** writing the draft.
 
-   **The two markers (this is the whole interface):** `FB:` at the start of a line = a feedback note; `status: ok` in frontmatter = "this one is approved, write it". Reject by deleting the file. Nothing else to learn.
+   **The interface is two marks, both at the bottom of the file:** a `FB:` line = a feedback note; the `- [ ] OK` checkbox = approval — tick it (`- [x]`) only after you've seen the revised result and you're happy. Reject by deleting the file. Nothing else to learn. (Approval naturally comes **last**, after the revise loop converges — so the tick is the final act, not an up-front gate.)
 
-   **Pre-seed this REVIEW block at the end of every draft file** so the markers are already there to fill:
+   **Pre-seed this REVIEW block at the end of every draft file** so the marks are already there to fill:
    ```
-   <!-- ── REVIEW ─────────────────────────────────
+   <!-- ── REVIEW（finalize 不會把這段寫進正式卡）──
      要改這張 → 在下面 FB: 後面寫（一行一則）
-     這張OK   → 把最上面 status: draft 改成 status: ok
+     這張OK   → 勾下面的 checkbox（Obsidian 直接點；或打 x）
      不要這張 → 直接刪掉這個檔
-   ──────────────────────────────────────────── -->
+   ──────────────────────────────────────── -->
    FB:
+
+   - [ ] OK，可以寫進正式卡（看完改好的結果再勾）
    ```
+   The checkbox is **live markdown, outside the comment**, so Obsidian renders it as a clickable box; the comment above only carries the instructions.
 
    Then print the **next step** to the user, in one message (no per-item stop):
    > 草稿都寫好在 `wiki/_drafts/`（共 N 張）。請在編輯器 / Obsidian 看，每張底部已附說明：
-   > • 要改 → 在該檔 `FB:` 後面寫　• OK → 把 `status: draft` 改成 `status: ok`　• 不要 → 刪檔
-   > 弄好一批就回來說「revise」（我照 FB 改）或「finalize」（把 `status: ok` 的寫進正式卡）。
+   > • 要改 → 在該檔 `FB:` 後面寫　• OK → 勾該檔的 `- [ ] OK` checkbox　• 不要 → 刪檔
+   > 弄好一批就回來說「revise」（我照 FB 改）或「finalize」（把已勾的寫進正式卡）。
 
    **Self-containment check before writing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft body for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) **any source file linked or `→`-pointed in the body** (e.g. `[…](../../src/…)` or `→ \`src/auth/jwt.ts:1-120\``). If found, **rewrite before displaying**: state the substance in the card, move the source location to the `sources:` frontmatter (provenance), and make sure every body link points card→card. Never show or write a card that defers the reader to a source or uses a source as a navigation target.
 
@@ -394,16 +397,16 @@ Steps:
    這個怎麼處理？可以只標起來、現在 reconcile 一邊或合併重寫、或判定不算真衝突。
    ```
 
-5. **Revise from feedback (batch).** When the user says "revise" / they're done, read **every** file in `wiki/_drafts/`, collect every line that starts with `FB:`, and revise each affected draft in **one pass**. After addressing a note, reset that line back to a bare `FB:` (so the REVIEW block stays ready for another round). **Never change a draft's `status` yourself** — approval is the user's alone. The user reviews the result as a **git diff of `wiki/_drafts/`** — only what changed lights up, so a NEW draft is read in full only once and every revision after is a diff. Then print the **next step**: 『改好了，再看一次 diff；還要改就再寫 `FB:`，OK 的把 `status` 改成 `ok`，都好了說「finalize」』. Loop until the user is satisfied.
+5. **Revise from feedback (batch).** When the user says "revise" / they're done, read **every** file in `wiki/_drafts/`, collect every line that starts with `FB:`, and revise each affected draft in **one pass**. After addressing a note, reset that line back to a bare `FB:` (so the REVIEW block stays ready for another round). **Never tick the OK checkbox yourself** — approval is the user's alone, and they tick it only after seeing your revised result. The user reviews the result as a **git diff of `wiki/_drafts/`** — only what changed lights up, so a NEW draft is read in full only once and every revision after is a diff. Then print the **next step**: 『改好了，再看一次 diff；還要改就再寫 `FB:`，滿意的勾 `OK` checkbox，都好了說「finalize」』. Loop until the user is satisfied.
 
-6. **Finalize — the only step that touches live `cards/`. Gated per card on `status: ok`.** On the user's explicit "finalize":
-   - **Only drafts whose frontmatter is `status: ok` get applied.** Before doing anything, scan `_drafts/`; if any are still `status: draft`, **list them back and ask** — 『這 N 張還是 `status: draft`、我先不動：<清單>。要先看完，還是只 finalize 已 OK 的？』 Never apply a still-`draft` card; this is what stops a half-reviewed batch from being written.
-   - `[NEW]` (`status: ok`) → strip the `status` field + the REVIEW block, then move `wiki/_drafts/<id>.md` → `wiki/cards/<id>.md`.
-   - `[EDIT]` (`status: ok`) → **re-read the current live `cards/<id>.md`** (it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
+6. **Finalize — the only step that touches live `cards/`. Gated per card on the OK checkbox.** On the user's explicit "finalize":
+   - **Only drafts whose `- [x] OK` checkbox is ticked get applied.** Before doing anything, scan `_drafts/`; if any are still unticked (`- [ ]`), **list them back and ask** — 『這 N 張還沒勾 OK、我先不動：<清單>。要先看完，還是只 finalize 已勾的？』 Never apply an unticked card; this is what stops a half-reviewed batch from being written.
+   - `[NEW]` (ticked) → strip the `status` field + the whole REVIEW block (checkbox + FB lines), then move `wiki/_drafts/<id>.md` → `wiki/cards/<id>.md`.
+   - `[EDIT]` (ticked) → **re-read the current live `cards/<id>.md`** (it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
    - Apply the `[LINK]` back-links / missing-links to live cards now that any `[NEW]` cards are real files.
-   - `[CONFLICT?]` (`status: ok`) → per the mapping below (mark or reconcile).
+   - `[CONFLICT?]` (ticked) → per the mapping below (mark or reconcile).
    - If the source was an inbox item and ≥1 card was finalized, run `inbox-promote.py` (below).
-   - Drafts left as `status: draft` **stay in `_drafts/`** for the next round; only the applied (`ok`) ones are cleared. Then print what was written and what still waits.
+   - Unticked drafts **stay in `_drafts/`** for the next round; only the applied (ticked) ones are cleared. Then print what was written and what still waits.
 
 7. **Cross-session safety.** Because live `cards/` is untouched until finalize, a parallel session (e.g. one running implementation while this one extracts) always sees the **stable, findable, approved** wiki — drafts and edit-proposals live only in `_drafts/` and never shadow a live card. The one real hazard, two sessions finalizing edits to the **same** card, is handled by step 6's "re-read live, then apply, stop on mismatch".
 
