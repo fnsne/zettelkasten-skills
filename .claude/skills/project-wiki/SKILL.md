@@ -13,7 +13,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 2. **One concept per card.** The test: can you use the card's title as a noun phrase in another card's prose? If not, split it.
 3. **Sources are read-only.** Cards link back to source via `sources:` frontmatter. Never edit source files. If source changes, mark the card stale in `_meta/stale.md`.
 4. **Two link layers.** `frontmatter.links` is the machine-readable index (list of card ids). Inline standard markdown links `[display text](./other-card.md)` form the narrative — the wiki reads like Wikipedia, not like a directory.
-5. **Semi-automatic — showing is not confirming.** Every extract / promote action proposes each change, shows its **full content**, then **stops and waits for the user's reply to that specific change** before writing it. Displaying a draft is not permission to write it — only the user's reply to that draft is. Never write a card in the same turn you first show it; never mass-edit cards.
+5. **Semi-automatic — nothing reaches the live wiki unconfirmed.** No live `cards/` file is created or modified without explicit user approval. `promote` and one-off edits propose each change, show full content, and wait for a reply before writing. `extract` (v2) stages every draft in `wiki/_drafts/` first — **staging is not a live write** — then the user reviews and annotates, and only an explicit **finalize** applies anything to live `cards/`. Writing to `_drafts/` is the proposal; finalize is the confirmation. Never silently mass-edit live cards; a live card is never moved out to be edited (see `extract`).
 
 ## Directory layout
 
@@ -26,6 +26,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
     ├── _root.md          # the one fixed entry point
     ├── _inbox/           # fleeting material awaiting processing
     │   └── 2026-05-22-jwt-想法.md
+    ├── _drafts/          # (v2) staged card drafts + edit proposals awaiting review & finalize
     ├── cards/            # all cards, flat
     │   ├── auth-jwt-flow.md
     │   ├── auth-overview.md
@@ -41,7 +42,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 
 This skill itself is installed at `.claude/skills/project-wiki/SKILL.md` (Claude Code auto-loads it from there). It operates on the `wiki/` folder shown above.
 
-Underscore-prefix entries (`_root.md`, `_inbox/`, `_meta/`) are wiki infrastructure. The rest (`cards/`, `ref/`) are content.
+Underscore-prefix entries (`_root.md`, `_inbox/`, `_drafts/`, `_meta/`) are wiki infrastructure. The rest (`cards/`, `ref/`) are content.
 
 ## Inbox: capturing fleeting material
 
@@ -236,7 +237,11 @@ Steps:
 
 **Trigger**: user provides one or more source files (code, PDF, doc, meeting notes, or an inbox item) and asks to extract cards.
 
-**Shape**: this is a **walk-through** workflow, not a batch. After an initial map, Claude presents ONE item at a time and writes it immediately on accept, then moves to the next. Each user reply is about a single concrete thing.
+**Shape (v2 — batch-draft, not walk-through)**: the expensive generation happens **once, up front**, into a staging area (`wiki/_drafts/`); the user then reviews all drafts at reading speed, annotating feedback **inline in the draft files**; Claude revises in batch; and **only a final `finalize` step touches live `cards/`**. This decouples the user's review time from generation time, lets feedback be written where the content is (not re-described in chat), and — critically — **never moves or hides a live card**, so a parallel session can keep reading the wiki.
+
+Two write targets, never confused:
+- **NEW card** → a brand-new draft `wiki/_drafts/<id>.md`. It does not exist in `cards/` yet, so no other session can be relying on it.
+- **EDIT of an existing card** (`[EXPAND]` / `[LINK]` / `[SECTION?]`) → a proposal `wiki/_drafts/<id>.edit.md` holding a ```diff against the live card. **The live `cards/<id>.md` is NOT moved, renamed, or modified during drafting** — it stays in place and findable; the change applies only at finalize.
 
 Steps:
 
@@ -279,27 +284,19 @@ Steps:
    Proceed? (回 y 開始；要調整提案內容或跳過幾項，講一下即可)
    ```
 
-   A `y` here approves *starting the walk-through only* — it shows titles + intent, not card bodies, so it is **never** approval to write any card's content. The same goes for any standing pressure the user gave before seeing content (「我趕時間」「弄快一點」「全部都好，直接做」): it sets the pace, it does not authorize writing unseen drafts.
+   A `y` here approves **which cards to draft** (the outline / slice), not their content — it is the cheap up-front checkpoint that constrains generation and is the single most effective place to prevent the model from "writing the wrong thing". The user drops / splits / merges / adds here. Approving the outline is **not** approval of any card body — that is reviewed later, as drafts.
 
-4. **Walk through each item in order.** For each, display the *actual change* (full card body for `[NEW]`, diff for `[EXPAND]`, etc.) — not just a summary — then ask in natural language. Interpret the reply per "Interpreting natural-language replies in walk-through workflows" in Operating conventions.
+4. **Batch-write every approved item as a draft to `wiki/_drafts/` (one generation pass).** Write them **all** in this pass, in dependency order — the user waits exactly once. **Do not touch `cards/` at all in this step.**
+   - `[NEW]` → `wiki/_drafts/<id>.md`: the full card (frontmatter + body) with `status: draft` added to frontmatter, and a trailing `<!-- FB: -->` line for the user to fill.
+   - `[EXPAND]` / `[LINK]` / `[SECTION?]` → `wiki/_drafts/<id>.edit.md`: frontmatter `target: cards/<id>.md` + `type: edit`; body = the proposed change as a ```diff fenced block **against the current live card**, followed by a `## FEEDBACK` area. The live card is left untouched.
+   - `[CONFLICT?]` → `wiki/_drafts/<a>__<b>.conflict.md`: both sides' claims + the proposed mark + a `## FEEDBACK` area.
+   - Use the per-type content formats below as the draft body. Run the self-containment check (below) on every `[NEW]`/`[EXPAND]` body **before** writing the draft.
 
-   **Show, then STOP — display and write are two separate turns.** After you show an item's full content, **end your turn and wait for the user's actual reply to that item.** Do not create or modify the file until they have replied to *that* draft. If you find yourself about to write a card in the same turn you first displayed it, you are skipping exactly the confirmation the user wants — STOP.
+   Then tell the user, in one message (no per-item stop): drafts are in `wiki/_drafts/`; review them in your editor / Obsidian; **write feedback inline** — `<!-- FB: ... -->` anywhere in a NEW draft, or under `## FEEDBACK` in an edit/conflict proposal; **leave a draft untouched to accept it**, **delete a draft file to reject it**. Then come back and say you're done (or "revise").
 
-   On accept (the user replied approving *this* item): **apply the change** before moving on. Later items often link to earlier ones; writing the accepted item now means subsequent proposals can see the actual file state and use real inline links.
+   **Self-containment check before writing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft body for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) **any source file linked or `→`-pointed in the body** (e.g. `[…](../../src/…)` or `→ \`src/auth/jwt.ts:1-120\``). If found, **rewrite before displaying**: state the substance in the card, move the source location to the `sources:` frontmatter (provenance), and make sure every body link points card→card. Never show or write a card that defers the reader to a source or uses a source as a navigation target.
 
-   On edit / 調整: apply the user's modification to the draft, **re-display the full adjusted draft as a colour diff (see "Re-display after an adjustment — colour the change" below), and STOP again** — never write an adjusted draft in the same turn you adjusted it. Repeat (show → wait → reply) until the user approves or skips. "改一下然後直接寫下去" is the exact failure to avoid: every adjustment gets shown and re-confirmed first.
-
-   On abort: stop. Items already written stay (atomic, complete on their own).
-
-   **Red flags — STOP, you are about to write something unconfirmed:**
-   - "User said 趕時間 / 全部都好, so I'll write all items now" — that was given before the content existed; it is not content approval.
-   - "I'll show the draft and write it in the same message" — showing ≠ confirming; the user gets no turn to react.
-   - "They asked me to adjust X, so I'll just apply it and move on" — re-display the adjusted draft and wait.
-   - "It's obviously what they want" — show it and let them say so.
-
-   **Self-containment check before showing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft body for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) **any source file linked or `→`-pointed in the body** (e.g. `[…](../../src/…)` or `→ \`src/auth/jwt.ts:1-120\``). If found, **rewrite before displaying**: state the substance in the card, move the source location to the `sources:` frontmatter (provenance), and make sure every body link points card→card. Never show or write a card that defers the reader to a source or uses a source as a navigation target.
-
-   Display format by type:
+   Draft-body content by type (write this as the draft file body — the trailing question line shown in each example is the old walk-through prompt; **omit it** in the draft file):
 
    **`[NEW]`** — show the complete draft card (frontmatter + body):
    ```
@@ -382,46 +379,24 @@ Steps:
    這個怎麼處理？可以只標起來、現在 reconcile 一邊或合併重寫、或判定不算真衝突。
    ```
 
-   **Re-display after an adjustment — colour the change.** When you re-display a draft *because the user just asked you to change something*, show the **whole** draft (full frontmatter + body — all the context, never only the changed lines) inside a ```` ```diff ```` fenced block, so the change stands out in colour against the unchanged surroundings. This is the one place the user is scanning a near-identical draft for the small thing that moved; the colour is what spares them from re-reading the whole card to find it.
+5. **Revise from feedback (batch).** When the user says they're done / asks to revise, read **every** file in `wiki/_drafts/`, collect all `<!-- FB: -->` and `## FEEDBACK` content, and revise each affected draft in **one pass**. Strip each FB marker you've addressed (or turn it into `<!-- FB-done: -->`). The user reviews the result as a **git diff of `wiki/_drafts/`** — only what changed lights up, so a NEW draft is read in full only once (the first time) and every revision after is a diff. Loop this step until the user is satisfied.
 
-   - Diff against **the exact version the user last saw**, not against the source — only the user's latest requested change should light up. (If they make a further edit next turn, diff against *that* re-display.)
-   - Unchanged line → plain context line with **one leading space** (renders neutral). Replaced line → the old text as a `-` line (red) immediately followed by the new text as a `+` line (green). Pure insertion → `+` line; pure deletion → `-` line. Frontmatter counts — a changed `tags:` / `links:` / `title:` line gets marked too.
-   - Because the colour now carries "what changed", **don't also narrate the edits in prose** — the diff shows them. Just re-display and ask (then STOP, per the rule above).
+6. **Finalize — the only step that touches live `cards/`.** On the user's explicit go:
+   - `[NEW]` drafts → strip `status: draft` and any FB markers, then move `wiki/_drafts/<id>.md` → `wiki/cards/<id>.md`.
+   - `[EDIT]` proposals → **re-read the current live `cards/<id>.md`** (it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
+   - Apply the `[LINK]` back-links / missing-links to live cards now that any `[NEW]` cards are real files.
+   - `[CONFLICT?]` → per the mapping below (mark or reconcile).
+   - If the source was an inbox item and ≥1 card was finalized, run `inbox-promote.py` (below).
+   - Then clear any leftover files in `_drafts/` for this batch.
 
-   This is the **re-display-after-adjustment path only**. The **first** time you show a `[NEW]` card there is no previous version to diff against — show it plainly per the `[NEW]` format above. `[EXPAND]` / `[LINK]` / `[SECTION?]` keep their first-display format too; but once the user asks to adjust any item, its re-display uses this colour-diff form.
+7. **Cross-session safety.** Because live `cards/` is untouched until finalize, a parallel session (e.g. one running implementation while this one extracts) always sees the **stable, findable, approved** wiki — drafts and edit-proposals live only in `_drafts/` and never shadow a live card. The one real hazard, two sessions finalizing edits to the **same** card, is handled by step 6's "re-read live, then apply, stop on mismatch".
 
-   Worked example — re-display after the user asked to lengthen the 摘要, make one link inline, and (consequently) sync `links:`:
-
-   ```diff
-     ---
-     id: auth-jwt-flow
-     title: JWT 簽發流程
-     tags: [auth, jwt]
-   - links: [auth-overview, decision-jwt-vs-session]
-   + links: [auth-overview, decision-jwt-vs-session, auth-refresh-token]
-     sources: [src/auth/jwt.ts:1-58]
-     created: 2026-06-08
-     ---
-
-     ## 摘要
-   - JWT 簽發流程負責簽發 token。
-   + JWT 簽發流程負責在登入後簽發帶 payload 的 stateless token。
-
-     ## 內容
-     [auth-overview](./auth-overview.md) 採 JWT 作為 access token，登入後簽發。
-   - - refresh 由 auth-refresh-token 負責
-   + - refresh 由 [auth-refresh-token](./auth-refresh-token.md) 負責
-     - 選型理由見 [decision-jwt-vs-session](./decision-jwt-vs-session.md)
-   ```
-
-   這樣可以嗎？(然後 STOP 等回覆)
-
-5. **For `[CONFLICT?]` items specifically**, map the user's intent to the right write:
+**`[CONFLICT?]` finalize mapping** — map the user's intent to the right write:
    - Mark only ("標起來" / "標一下") → invoke `python .claude/skills/project-wiki/scripts/conflict-mark.py <card-a> <card-b> --description "<one-liner>"`. The script bidirectionally adds the conflict to both cards' `conflicts:` frontmatter and appends to `_meta/conflicts.md`. Do **not** modify either card's prose.
    - Reconcile ("現在處理" / "想 reconcile") → enter a resolution sub-flow: ask whether to (a) keep one side and rewrite the other, (b) reconcile both into one revised wording, or (c) create a new card framing both as valid under different conditions. Show the diff. Re-ask before writing.
    - Not really a conflict / skip → no action.
 
-6. **If the source was an inbox item**, after the walk-through ends (whether complete or aborted after at least one card was written), run `python .claude/skills/project-wiki/scripts/inbox-promote.py wiki/_inbox/<filename>`. The script moves the file to `wiki/ref/` and rewrites any card's `sources:` path that referenced the old `_inbox/` location. The inbox file is **never deleted** — it's preserved in `ref/` for traceability.
+**Inbox promotion at finalize** — when the source was an inbox item and ≥1 card was finalized, run `python .claude/skills/project-wiki/scripts/inbox-promote.py wiki/_inbox/<filename>`. The script moves the file to `wiki/ref/` and rewrites any card's `sources:` path that referenced the old `_inbox/` location. The inbox file is **never deleted** — it's preserved in `ref/` for traceability.
 
 **Never** edit source files in `src/`, `docs/`, `meetings/`, or `ref/`.
 
