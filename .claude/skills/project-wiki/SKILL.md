@@ -13,7 +13,7 @@ A Zettelkasten-style wiki that lives inside a project folder. Every card is an a
 2. **One concept per card.** The test: can you use the card's title as a noun phrase in another card's prose? If not, split it.
 3. **Sources are read-only.** Cards link back to source via `sources:` frontmatter. Never edit source files. If source changes, mark the card stale in `_meta/stale.md`.
 4. **Two link layers.** `frontmatter.links` is the machine-readable index (list of card ids). Inline standard markdown links `[display text](./other-card.md)` form the narrative — the wiki reads like Wikipedia, not like a directory.
-5. **Semi-automatic — nothing reaches the live wiki unconfirmed.** No live `cards/` file is created or modified without explicit user approval. `promote` and one-off edits propose each change, show full content, and wait for a reply before writing. `extract` (v2) stages every draft in `wiki/_drafts/` first — **staging is not a live write** — then the user reviews and annotates, and only an explicit **finalize** applies anything to live `cards/`. Writing to `_drafts/` is the proposal; finalize is the confirmation. Never silently mass-edit live cards; a live card is never moved out to be edited (see `extract`).
+5. **Semi-automatic — nothing reaches the live wiki unconfirmed.** No live `cards/` file is created or modified without explicit user approval. `promote` and one-off edits propose each change, show full content, and wait for a reply before writing. `extract` (v2) stages every draft in `wiki/_drafts/` first — **staging is not a live write** — then the user reviews and annotates, and a draft reaches live `cards/` only when the user ticks its OK box (one `go` action revises the `FB:`'d ones and writes the ticked ones, per-draft). Writing to `_drafts/` is the proposal; the tick is the confirmation. Never silently mass-edit live cards; a live card is never moved out to be edited (see `extract`).
 
 ## Directory layout
 
@@ -237,11 +237,11 @@ Steps:
 
 **Trigger**: user provides one or more source files (code, PDF, doc, meeting notes, or an inbox item) and asks to extract cards.
 
-**Shape (v2 — batch-draft, not walk-through)**: the expensive generation happens **once, up front**, into a staging area (`wiki/_drafts/`); the user then reviews all drafts at reading speed, annotating feedback **inline in the draft files**; Claude revises in batch; and **only a final `finalize` step touches live `cards/`**. This decouples the user's review time from generation time, lets feedback be written where the content is (not re-described in chat), and — critically — **never moves or hides a live card**, so a parallel session can keep reading the wiki.
+**Shape (v2 — batch-draft, not walk-through)**: the expensive generation happens **once, up front**, into a staging area (`wiki/_drafts/`); the user then reviews all drafts at reading speed, annotating feedback **inline in the draft files**; Claude revises in batch; and a draft **reaches live `cards/` only when the user ticks its OK box** (there is no separate "revise" vs "finalize" — one action handles each draft by its state). This decouples the user's review time from generation time, lets feedback be written where the content is (not re-described in chat), and — critically — **never moves or hides a live card**, so a parallel session can keep reading the wiki.
 
 Two write targets, never confused (every draft filename carries a zero-padded ordinal prefix `NN-` matching the map order from step 3, so Obsidian's A–Z file sort lists them in review order):
 - **NEW card** → a brand-new draft `wiki/_drafts/NN-<id>.md`. It does not exist in `cards/` yet, so no other session can be relying on it.
-- **EDIT of an existing card** (`[EXPAND]` / `[LINK]` / `[SECTION?]`) → a proposal `wiki/_drafts/NN-<id>.edit.md` holding a ```diff against the live card. **The live `cards/<id>.md` is NOT moved, renamed, or modified during drafting** — it stays in place and findable; the change applies only at finalize.
+- **EDIT of an existing card** (`[EXPAND]` / `[LINK]` / `[SECTION?]`) → a proposal `wiki/_drafts/NN-<id>.edit.md` holding a ```diff against the live card. **The live `cards/<id>.md` is NOT moved, renamed, or modified during drafting** — it stays in place and findable; the change applies only once the user ticks the proposal's OK box.
 
 Steps:
 
@@ -312,7 +312,7 @@ Steps:
    Then print the **next step** to the user, in one message (no per-item stop):
    > 草稿都寫好在 `wiki/_drafts/`（共 N 張）。請在編輯器 / Obsidian 看，每張底部已附說明：
    > • 要改 → 在該檔 `FB:` 後面寫　• OK → 勾該檔的 `- [ ] OK` checkbox　• 不要 → 刪檔
-   > 弄好一批就回來說「revise」（我照 FB 改）或「finalize」（把已勾的寫進正式卡）。
+   > 弄好就回來說「go」（一個動作：有 `FB:` 的我改、已勾 OK 的寫進正式卡；沒好的留著下輪）。
 
    **Self-containment check before writing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft body for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) **any source file linked or `→`-pointed in the body** (e.g. `[…](../../src/…)` or `→ \`src/auth/jwt.ts:1-120\``). If found, **rewrite before displaying**: state the substance in the card, move the source location to the `sources:` frontmatter (provenance), and make sure every body link points card→card. Never show or write a card that defers the reader to a source or uses a source as a navigation target.
 
@@ -399,23 +399,22 @@ Steps:
    這個怎麼處理？可以只標起來、現在 reconcile 一邊或合併重寫、或判定不算真衝突。
    ```
 
-5. **Revise from feedback (batch).** When the user says "revise" / they're done, read **every** file in `wiki/_drafts/`, collect every line that starts with `FB:`, and revise each affected draft in **one pass**.
-   - **Clear and doable** → apply it, then reset that line back to a bare `FB:` (the REVIEW block stays ready for another round).
-   - **Ambiguous, infeasible, conflicts with a rule / another card, or you disagree** → do **not** silently guess or drop it. Write your reply/question **into the draft** as an `RE:` line directly under that `FB:`, leave the `FB:` unresolved, and don't apply that part. The dialogue stays in the file, co-located with the content. (Don't blindly comply with a note you think is wrong — push back via `RE:` with your reasoning; the user answers in a new `FB:`.)
+5. **Process the batch — one action that revises and finalizes, decided per-draft.** There is **no separate "revise" vs "finalize"**: a draft is *done* exactly when its `- [x] OK` box is ticked. When the user says they've reviewed (any of 「go」 / 「處理」 / 「revise」 / 「finalize」 means this), scan **every** file in `wiki/_drafts/` and act on each by its current state:
 
-   **Never tick the OK checkbox yourself** — approval is the user's alone, and they tick it only after seeing your revised result. The user reviews the result as a **git diff of `wiki/_drafts/`** — only what changed lights up, so a NEW draft is read in full only once and every revision after is a diff. Then print the **next step**, calling out anything still open: 『改好了 N 張；其中 M 張我留了 `RE:` 回問需要你定（<清單>）。再看一次 diff，要改寫 `FB:`、回我的 `RE:` 也寫在 `FB:`，滿意的勾 `OK` checkbox，都好了說「finalize」』. Loop until the user is satisfied.
+   - **Has an unaddressed `FB:`** → **revise** it: apply the note and reset that line to a bare `FB:`; or — if it's ambiguous / infeasible / conflicts with a rule or another card / you disagree — write an `RE:` line under that `FB:` and leave it unresolved (don't guess, don't drop, don't comply blindly). **Keep it in `_drafts/`, leave it unticked** — a revised draft is never written live in the same pass it was revised; the user must see the diff first.
+   - **Ticked `- [x]`, no open `FB:`/`RE:`** → **finalize** it (the only thing that touches live `cards/`):
+     - `[NEW]` → strip the `status` field + the whole REVIEW block, then move `wiki/_drafts/NN-<id>.md` → `wiki/cards/<id>.md` (**drop the `NN-` prefix**).
+     - `[EDIT]` → **re-read the current live card** (resolve from the proposal's `target:` frontmatter, not the filename; it may have changed since the diff was drafted), apply the change to that current content, then delete the proposal. If it no longer fits, **stop and show the mismatch** instead of applying.
+     - `[CONFLICT?]` → per the mapping below (mark or reconcile).
+     - Then apply the `[LINK]` back-links / missing-links to live cards (the `[NEW]` ones are now real files), and clear the finalized drafts from `_drafts/`.
+   - **Ticked but still has an open `FB:`/`RE:`** → **flag, don't write** — 『這張你勾了 OK，但還有未解的 RE:/FB:，確定照現狀寫？』 — never silently overwrite an open thread.
+   - **Unticked, no `FB:`** → leave it; the user hasn't decided.
 
-6. **Finalize — the only step that touches live `cards/`. Gated per card on the OK checkbox.** On the user's explicit "finalize":
-   - **Only drafts whose `- [x] OK` checkbox is ticked get applied.** Before doing anything, scan `_drafts/`; if any are still unticked (`- [ ]`), **list them back and ask** — 『這 N 張還沒勾 OK、我先不動：<清單>。要先看完，還是只 finalize 已勾的？』 Never apply an unticked card; this is what stops a half-reviewed batch from being written.
-   - **If a ticked draft still has an open `RE:` or a non-empty `FB:` line, flag it before writing** — 『這張你勾了 OK，但還有未解的 RE:/FB:，確定照現狀寫？』 — don't silently overwrite an open thread.
-   - `[NEW]` (ticked) → strip the `status` field + the whole REVIEW block (checkbox + FB lines), then move `wiki/_drafts/NN-<id>.md` → `wiki/cards/<id>.md` (**drop the `NN-` prefix** — the live filename is just `<id>.md`).
-   - `[EDIT]` (ticked) → **re-read the current live `cards/<id>.md`** (resolve it from the proposal's `target:` frontmatter, not the prefixed draft name; it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
-   - Apply the `[LINK]` back-links / missing-links to live cards now that any `[NEW]` cards are real files.
-   - `[CONFLICT?]` (ticked) → per the mapping below (mark or reconcile).
-   - If the source was an inbox item and ≥1 card was finalized, run `inbox-promote.py` (below).
-   - Unticked drafts **stay in `_drafts/`** for the next round; only the applied (ticked) ones are cleared. Then print what was written and what still waits.
+   **The two branches never collide in one pass**: revising means the draft had an open `FB:` (so it isn't ticked-and-clean → not eligible to finalize); finalizing means it was ticked and clean (so there was nothing to revise). Each draft does exactly one of the two per pass. **Never tick a box yourself** — the tick is the user's, given only after they've seen your revision as a **git diff of `wiki/_drafts/`** (only what changed lights up; a NEW draft is read in full once, every revision after is a diff).
 
-7. **Cross-session safety.** Because live `cards/` is untouched until finalize, a parallel session (e.g. one running implementation while this one extracts) always sees the **stable, findable, approved** wiki — drafts and edit-proposals live only in `_drafts/` and never shadow a live card. The one real hazard, two sessions finalizing edits to the **same** card, is handled by step 6's "re-read live, then apply, stop on mismatch".
+   If the source was an inbox item and ≥1 card was finalized this pass, run `inbox-promote.py` (below). Then report: **finalized X**, **revised Y**（再看一次 diff）, **still open Z**（`RE:`/未決）. Loop until `_drafts/` is empty.
+
+6. **Cross-session safety.** Because live `cards/` is touched only when a draft is finalized (ticked + clean), a parallel session (e.g. one running implementation while this one extracts) always sees the **stable, findable, approved** wiki — drafts and edit-proposals live only in `_drafts/` and never shadow a live card. The one real hazard, two sessions finalizing edits to the **same** card, is handled by the finalize branch's "re-read live, then apply, stop on mismatch".
 
 **`[CONFLICT?]` finalize mapping** — map the user's intent to the right write:
    - Mark only ("標起來" / "標一下") → invoke `python .claude/skills/project-wiki/scripts/conflict-mark.py <card-a> <card-b> --description "<one-liner>"`. The script bidirectionally adds the conflict to both cards' `conflicts:` frontmatter and appends to `_meta/conflicts.md`. Do **not** modify either card's prose.
