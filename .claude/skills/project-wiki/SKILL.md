@@ -239,9 +239,9 @@ Steps:
 
 **Shape (v2 — batch-draft, not walk-through)**: the expensive generation happens **once, up front**, into a staging area (`wiki/_drafts/`); the user then reviews all drafts at reading speed, annotating feedback **inline in the draft files**; Claude revises in batch; and **only a final `finalize` step touches live `cards/`**. This decouples the user's review time from generation time, lets feedback be written where the content is (not re-described in chat), and — critically — **never moves or hides a live card**, so a parallel session can keep reading the wiki.
 
-Two write targets, never confused:
-- **NEW card** → a brand-new draft `wiki/_drafts/<id>.md`. It does not exist in `cards/` yet, so no other session can be relying on it.
-- **EDIT of an existing card** (`[EXPAND]` / `[LINK]` / `[SECTION?]`) → a proposal `wiki/_drafts/<id>.edit.md` holding a ```diff against the live card. **The live `cards/<id>.md` is NOT moved, renamed, or modified during drafting** — it stays in place and findable; the change applies only at finalize.
+Two write targets, never confused (every draft filename carries a zero-padded ordinal prefix `NN-` matching the map order from step 3, so Obsidian's A–Z file sort lists them in review order):
+- **NEW card** → a brand-new draft `wiki/_drafts/NN-<id>.md`. It does not exist in `cards/` yet, so no other session can be relying on it.
+- **EDIT of an existing card** (`[EXPAND]` / `[LINK]` / `[SECTION?]`) → a proposal `wiki/_drafts/NN-<id>.edit.md` holding a ```diff against the live card. **The live `cards/<id>.md` is NOT moved, renamed, or modified during drafting** — it stays in place and findable; the change applies only at finalize.
 
 Steps:
 
@@ -287,9 +287,10 @@ Steps:
    A `y` here approves **which cards to draft** (the outline / slice), not their content — it is the cheap up-front checkpoint that constrains generation and is the single most effective place to prevent the model from "writing the wrong thing". The user drops / splits / merges / adds here. Approving the outline is **not** approval of any card body — that is reviewed later, as drafts.
 
 4. **Batch-write every approved item as a draft to `wiki/_drafts/` (one generation pass).** Write them **all** in this pass, in dependency order — the user waits exactly once. **Do not touch `cards/` at all in this step.** Every draft carries `status: draft` in frontmatter and ends with the pre-seeded REVIEW template (below), so the user never has to remember or type the markers.
-   - `[NEW]` → `wiki/_drafts/<id>.md`: the full card (frontmatter + body), `status: draft` in frontmatter.
-   - `[EXPAND]` / `[LINK]` / `[SECTION?]` → `wiki/_drafts/<id>.edit.md`: frontmatter `target: cards/<id>.md` + `type: edit` + `status: draft`; body = the proposed change as a ```diff fenced block **against the current live card**. The live card is left untouched.
-   - `[CONFLICT?]` → `wiki/_drafts/<a>__<b>.conflict.md`: frontmatter `status: draft`; body = both sides' claims + the proposed mark.
+   - `[NEW]` → `wiki/_drafts/NN-<id>.md`: the full card (frontmatter + body), `status: draft` in frontmatter.
+   - `[EXPAND]` / `[LINK]` / `[SECTION?]` → `wiki/_drafts/NN-<id>.edit.md`: frontmatter `target: cards/<id>.md` + `type: edit` + `status: draft`; body = the proposed change as a ```diff fenced block **against the current live card**. The live card is left untouched.
+   - `[CONFLICT?]` → `wiki/_drafts/NN-<a>__<b>.conflict.md`: frontmatter `status: draft`; body = both sides' claims + the proposed mark.
+   - **`NN-` is a zero-padded ordinal** (`01-`, `02-`, …) following the dependency order of the step-3 map — purely so the files sort in review order in Obsidian. It is **not** part of the card id, and is dropped at finalize; for `EDIT`/`CONFLICT?` the real target always comes from the proposal's `target:` frontmatter, never the filename.
    - Use the per-type content formats below as the draft body. Run the self-containment check (below) on every `[NEW]`/`[EXPAND]` body **before** writing the draft.
 
    **The interface is two marks, both at the bottom of the file:** a `FB:` line = a feedback note; the `- [ ] OK` checkbox = approval — tick it (`- [x]`) only after you've seen the revised result and you're happy. Reject by deleting the file. Nothing else to learn. (Approval naturally comes **last**, after the revise loop converges — so the tick is the final act, not an up-front gate.)
@@ -401,8 +402,8 @@ Steps:
 
 6. **Finalize — the only step that touches live `cards/`. Gated per card on the OK checkbox.** On the user's explicit "finalize":
    - **Only drafts whose `- [x] OK` checkbox is ticked get applied.** Before doing anything, scan `_drafts/`; if any are still unticked (`- [ ]`), **list them back and ask** — 『這 N 張還沒勾 OK、我先不動：<清單>。要先看完，還是只 finalize 已勾的？』 Never apply an unticked card; this is what stops a half-reviewed batch from being written.
-   - `[NEW]` (ticked) → strip the `status` field + the whole REVIEW block (checkbox + FB lines), then move `wiki/_drafts/<id>.md` → `wiki/cards/<id>.md`.
-   - `[EDIT]` (ticked) → **re-read the current live `cards/<id>.md`** (it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
+   - `[NEW]` (ticked) → strip the `status` field + the whole REVIEW block (checkbox + FB lines), then move `wiki/_drafts/NN-<id>.md` → `wiki/cards/<id>.md` (**drop the `NN-` prefix** — the live filename is just `<id>.md`).
+   - `[EDIT]` (ticked) → **re-read the current live `cards/<id>.md`** (resolve it from the proposal's `target:` frontmatter, not the prefixed draft name; it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
    - Apply the `[LINK]` back-links / missing-links to live cards now that any `[NEW]` cards are real files.
    - `[CONFLICT?]` (ticked) → per the mapping below (mark or reconcile).
    - If the source was an inbox item and ≥1 card was finalized, run `inbox-promote.py` (below).
