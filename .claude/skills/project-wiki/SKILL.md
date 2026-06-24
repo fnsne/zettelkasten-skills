@@ -293,7 +293,7 @@ Steps:
    - **`NN-` is a zero-padded ordinal** (`01-`, `02-`, …) following the dependency order of the step-3 map — purely so the files sort in review order in Obsidian. It is **not** part of the card id, and is dropped at finalize; for `EDIT`/`CONFLICT?` the real target always comes from the proposal's `target:` frontmatter, never the filename.
    - Use the per-type content formats below as the draft body. Run the self-containment check (below) on every `[NEW]`/`[EXPAND]` body **before** writing the draft.
 
-   **The interface is two marks, both at the bottom of the file:** a `FB:` line = a feedback note; the `- [ ] OK` checkbox = approval — tick it (`- [x]`) only after you've seen the revised result and you're happy. Reject by deleting the file. Nothing else to learn. (Approval naturally comes **last**, after the revise loop converges — so the tick is the final act, not an up-front gate.)
+   **The interface is two marks the user writes, both at the bottom of the file:** a `FB:` line = a feedback note; the `- [ ] OK` checkbox = approval — tick it (`- [x]`) only after you've seen the revised result and you're happy. Reject by deleting the file. Nothing else to learn. (Approval naturally comes **last**, after the revise loop converges — so the tick is the final act, not an up-front gate.) **One mark Claude writes back:** an `RE:` line under a `FB:` — Claude's reply/question when it couldn't cleanly apply that note (see step 5). The user answers it in a `FB:` line; the whole exchange threads in the file, never in chat.
 
    **Pre-seed this REVIEW block at the end of every draft file** so the marks are already there to fill:
    ```
@@ -301,6 +301,7 @@ Steps:
      要改這張 → 在下面 FB: 後面寫（一行一則）
      這張OK   → 勾下面的 checkbox（Obsidian 直接點；或打 x）
      不要這張 → 直接刪掉這個檔
+     看到 RE: → 那是我對你 FB 的回問，請在 FB: 回我
    ──────────────────────────────────────── -->
    FB:
 
@@ -398,10 +399,15 @@ Steps:
    這個怎麼處理？可以只標起來、現在 reconcile 一邊或合併重寫、或判定不算真衝突。
    ```
 
-5. **Revise from feedback (batch).** When the user says "revise" / they're done, read **every** file in `wiki/_drafts/`, collect every line that starts with `FB:`, and revise each affected draft in **one pass**. After addressing a note, reset that line back to a bare `FB:` (so the REVIEW block stays ready for another round). **Never tick the OK checkbox yourself** — approval is the user's alone, and they tick it only after seeing your revised result. The user reviews the result as a **git diff of `wiki/_drafts/`** — only what changed lights up, so a NEW draft is read in full only once and every revision after is a diff. Then print the **next step**: 『改好了，再看一次 diff；還要改就再寫 `FB:`，滿意的勾 `OK` checkbox，都好了說「finalize」』. Loop until the user is satisfied.
+5. **Revise from feedback (batch).** When the user says "revise" / they're done, read **every** file in `wiki/_drafts/`, collect every line that starts with `FB:`, and revise each affected draft in **one pass**.
+   - **Clear and doable** → apply it, then reset that line back to a bare `FB:` (the REVIEW block stays ready for another round).
+   - **Ambiguous, infeasible, conflicts with a rule / another card, or you disagree** → do **not** silently guess or drop it. Write your reply/question **into the draft** as an `RE:` line directly under that `FB:`, leave the `FB:` unresolved, and don't apply that part. The dialogue stays in the file, co-located with the content. (Don't blindly comply with a note you think is wrong — push back via `RE:` with your reasoning; the user answers in a new `FB:`.)
+
+   **Never tick the OK checkbox yourself** — approval is the user's alone, and they tick it only after seeing your revised result. The user reviews the result as a **git diff of `wiki/_drafts/`** — only what changed lights up, so a NEW draft is read in full only once and every revision after is a diff. Then print the **next step**, calling out anything still open: 『改好了 N 張；其中 M 張我留了 `RE:` 回問需要你定（<清單>）。再看一次 diff，要改寫 `FB:`、回我的 `RE:` 也寫在 `FB:`，滿意的勾 `OK` checkbox，都好了說「finalize」』. Loop until the user is satisfied.
 
 6. **Finalize — the only step that touches live `cards/`. Gated per card on the OK checkbox.** On the user's explicit "finalize":
    - **Only drafts whose `- [x] OK` checkbox is ticked get applied.** Before doing anything, scan `_drafts/`; if any are still unticked (`- [ ]`), **list them back and ask** — 『這 N 張還沒勾 OK、我先不動：<清單>。要先看完，還是只 finalize 已勾的？』 Never apply an unticked card; this is what stops a half-reviewed batch from being written.
+   - **If a ticked draft still has an open `RE:` or a non-empty `FB:` line, flag it before writing** — 『這張你勾了 OK，但還有未解的 RE:/FB:，確定照現狀寫？』 — don't silently overwrite an open thread.
    - `[NEW]` (ticked) → strip the `status` field + the whole REVIEW block (checkbox + FB lines), then move `wiki/_drafts/NN-<id>.md` → `wiki/cards/<id>.md` (**drop the `NN-` prefix** — the live filename is just `<id>.md`).
    - `[EDIT]` (ticked) → **re-read the current live `cards/<id>.md`** (resolve it from the proposal's `target:` frontmatter, not the prefixed draft name; it may have changed since the diff was drafted), apply the proposed change to that current content, then delete the proposal. If the live card has moved on in a way the diff no longer fits, **stop and show the user the mismatch** instead of blindly applying.
    - Apply the `[LINK]` back-links / missing-links to live cards now that any `[NEW]` cards are real files.
