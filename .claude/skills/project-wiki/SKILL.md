@@ -293,7 +293,7 @@ Steps:
    - **`NN-` is a zero-padded ordinal** (`01-`, `02-`, …) following the dependency order of the step-3 map — purely so the files sort in review order in Obsidian. It is **not** part of the card id, and is dropped at finalize; for `EDIT`/`CONFLICT?` the real target always comes from the proposal's `target:` frontmatter, never the filename.
    - Use the per-type content formats below as the draft body. Run the self-containment check (below) on every `[NEW]`/`[EXPAND]` body **before** writing the draft.
 
-   **The interface is two marks the user writes, both at the bottom of the file:** a `FB:` line = a feedback note; the `- [ ] OK` checkbox = approval — tick it (`- [x]`) only after you've seen the revised result and you're happy. Reject by deleting the file. Nothing else to learn. (Approval naturally comes **last**, after the revise loop converges — so the tick is the final act, not an up-front gate.) **One mark Claude writes back:** an `RE:` line under a `FB:` — Claude's reply/question when it couldn't cleanly apply that note (see step 5). The user answers it in a `FB:` line; the whole exchange threads in the file, never in chat.
+   **The interface is two marks the user writes, both at the bottom of the file:** a `FB:` line = a feedback note; the `- [ ] OK` checkbox = approval — tick it (`- [x]`) only after you've seen the revised result and you're happy. Reject by deleting the file. Nothing else to learn. (Approval naturally comes **last**, after the revise loop converges — so the tick is the final act, not an up-front gate.) **One mark Claude writes back:** an `RE:` line under a `FB:` — Claude's reply/question when it couldn't cleanly apply that note (see step 5). The user answers it in a `FB:` line; the whole exchange threads in the file, never in chat. **History is kept, not erased:** once Claude addresses a note it marks it `FB✓:` (and a resolved `RE:` becomes `RE✓:`) but leaves the text in place, so the full feedback log stays visible until the card is finalized.
 
    **Pre-seed this REVIEW block at the end of every draft file** so the marks are already there to fill:
    ```
@@ -302,6 +302,7 @@ Steps:
      這張OK   → 勾下面的 checkbox（Obsidian 直接點；或打 x）
      不要這張 → 直接刪掉這個檔
      看到 RE: → 那是我對你 FB 的回問，請在 FB: 回我
+     FB✓:/RE✓: → 我已處理過的紀錄（保留著，別刪也不用理）
    ──────────────────────────────────────── -->
    FB:
 
@@ -401,9 +402,9 @@ Steps:
 
 5. **Process the batch — one action that revises and finalizes, decided per-draft.** There is **no separate "revise" vs "finalize"**: a draft is *done* exactly when its `- [x] OK` box is ticked. When the user says they've reviewed (any of 「go」 / 「處理」 / 「revise」 / 「finalize」 means this), scan **every** file in `wiki/_drafts/` and act on each by its current state:
 
-   - **Has an unaddressed `FB:`** → **revise** it: apply the note and reset that line to a bare `FB:`; or — if it's ambiguous / infeasible / conflicts with a rule or another card / you disagree — write an `RE:` line under that `FB:` and leave it unresolved (don't guess, don't drop, don't comply blindly). **Keep it in `_drafts/`, leave it unticked** — a revised draft is never written live in the same pass it was revised; the user must see the diff first.
-   - **Ticked `- [x]`, no open `FB:`/`RE:`** → **finalize** it (the only thing that touches live `cards/`):
-     - `[NEW]` → strip the `status` field + the whole REVIEW block, then move `wiki/_drafts/NN-<id>.md` → `wiki/cards/<id>.md` (**drop the `NN-` prefix**).
+   - **Has an open `FB:`** (a `FB:` line with text, not yet marked done) → **revise** it: apply the note, then **mark that line `FB✓:` and keep its text** — addressed notes stay as a visible history so the user never loses track of what was asked. Always keep one fresh bare `FB:` line at the bottom for the next note. If the note is ambiguous / infeasible / conflicts with a rule or another card / you disagree → don't guess, drop, or comply blindly: write an `RE:` line under that `FB:` and leave the `FB:` open. When the user answers an `RE:` (in a following `FB:`), resolve it and mark the `RE:` as `RE✓:` (kept as history) too. **Keep the draft in `_drafts/`, leave it unticked** — a revised draft is never written live in the same pass it was revised; the user must see the diff first.
+   - **Ticked `- [x]`, with no *open* `FB:`/`RE:` left** (resolved `FB✓:` / `RE✓:` history doesn't count as open) → **finalize** it (the only thing that touches live `cards/`):
+     - `[NEW]` → strip the `status` field + the whole REVIEW block (including the `FB✓:`/`RE✓:` history), then move `wiki/_drafts/NN-<id>.md` → `wiki/cards/<id>.md` (**drop the `NN-` prefix**).
      - `[EDIT]` → **re-read the current live card** (resolve from the proposal's `target:` frontmatter, not the filename; it may have changed since the diff was drafted), apply the change to that current content, then delete the proposal. If it no longer fits, **stop and show the mismatch** instead of applying.
      - `[CONFLICT?]` → per the mapping below (mark or reconcile).
      - Then apply the `[LINK]` back-links / missing-links to live cards (the `[NEW]` ones are now real files), and clear the finalized drafts from `_drafts/`.
