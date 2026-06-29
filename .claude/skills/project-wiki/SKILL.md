@@ -158,6 +158,18 @@ When extracting cards, apply these rules. They make inline linking possible.
 
 > When a chunk of a source is itself one atomic unit (e.g. "120 個錯誤碼"), don't make a separate card that merely *describes* it: if that's the source's only content, just mention it where relevant; if the source also holds other concepts, extract that chunk **as one card**. Either way no "see the full list in source" body link is ever needed.
 
+**Rule 6 — Link, don't restate (self-containment ≠ duplication).** Self-containment (Rule 5) means a reader grasps *this card's own* concept without opening a **source file** — it does **not** license re-explaining content that belongs to another **card**. When a card needs a concept that already has its own home card, give a **one-sentence orienting reference + an inline link**, never a re-explanation. The distinction:
+
+- ✅ **Orienting reference** (keep — Rule 5 needs it): `…採 [stateless 設計](./decision-jwt-vs-session.md)，因此 token 無狀態…` — one sentence, then link.
+- ❌ **Restating substance** (the smell): copying the linked card's actual reasoning / steps / field list / definition into this card. The same passage living in two cards means a concept has no single home.
+
+**Fix when you catch duplication while extracting:**
+- If the repeated block is itself a **referenceable concept** (its title passes Rule 1's noun-phrase test, and ≥2 cards need it) → **extract it into its own atomic card**, and replace every restatement with a link to it.
+- Otherwise → pick **one owner card** for that content and have the others link to it.
+- **Don't over-atomize**: only spin off a shared card when its title passes the noun-phrase test; never shatter prose into junk micro-cards to avoid a sentence of overlap. A one-sentence orienting reference is *not* duplication — a repeated paragraph / list / definition is.
+
+> Why this rule exists: a card written to be self-contained, by a writer who doesn't feel the friction of retyping, will happily re-explain a sibling card's content inline. That is the main source of wiki-wide redundancy. The cure is the same one Zettelkasten always uses — one home per concept, everyone else links.
+
 ## Reading the wiki in Obsidian
 
 The wiki renders in any markdown viewer, but [Obsidian](https://obsidian.md) is the best reader — it gives backlinks, a graph view, quick-switch, and full-text search over the cards. Guidance:
@@ -473,6 +485,8 @@ Checks performed by the script:
 - For a related batch (e.g., all stem from the same source), re-invoke `extract` on that source; the missing connections show up as `[LINK]` items in its walkthrough.
 
 **Claude-side check (semantic): non-self-contained cards.** Checks 9–10 catch deferral *words* and source *links* in the body; Claude reads card bodies for the residual semantic failure neither can see — substance deferred to a source while the prose never says *what* the thing is, even with no trigger word or link (e.g. a card that gestures at "the validation logic" without describing it). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card — directly, or by re-invoking `extract` on the card's source.
+
+**Claude-side check (semantic): duplicated substance across cards.** The opposite smell to missing-links: two or more cards that **restate the same substance** (same reasoning / steps / field list / definition) instead of one owning it and the rest linking (Card splitting Rule 6). Claude reads card bodies and reports each cluster with the duplicated block and a proposed fix — either **extract the shared concept into its own atomic card** (when its title passes the noun-phrase test and ≥2 cards need it) and replace the restatements with links, or **name one owner card** and turn the other copies into a one-sentence orienting reference + link. **Be conservative**: a one-sentence orienting reference is intended and is *not* flagged; only a repeated *paragraph / list / definition* of substance counts (mirror of the missing-links check — same scan, opposite direction). Apply via `extract` (the shared card surfaces as `[NEW]`, the de-duplication as `[EDIT]`/`[LINK]` items) or, for a one-off, a direct edit.
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 
