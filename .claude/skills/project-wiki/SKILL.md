@@ -217,6 +217,7 @@ Mechanical, deterministic operations live in Python scripts under `.claude/skill
 | Operation | Implementation |
 |---|---|
 | Audit (all 10 health checks + `_meta/` writes) | `scripts/audit.py` |
+| Verify FB closure in `_drafts/` (no `FB:` left unanswered) after a `go` pass | `scripts/draft_audit.py` |
 | Mark a bidirectional conflict between two cards | `scripts/conflict-mark.py` |
 | Promote an inbox file to `ref/` and rewrite card `sources:` paths | `scripts/inbox-promote.py` |
 | Concept identification, contradiction detection, link proposals, query traversal | Claude |
@@ -425,7 +426,15 @@ Steps:
 
    **The two branches never collide in one pass**: revising means the draft had an open `FB:` (so it isn't ticked-and-clean → not eligible to finalize); finalizing means it was ticked and clean (so there was nothing to revise). Each draft does exactly one of the two per pass. **Never tick a box yourself** — the tick is the user's, given only after they've seen your revision as a **git diff of `wiki/_drafts/`** (only what changed lights up; a NEW draft is read in full once, every revision after is a diff).
 
-   If the source was an inbox item and ≥1 card was finalized this pass, run `inbox-promote.py` (below). Then report: **finalized X**, **revised Y**（再看一次 diff）, **still open Z**（`RE:`/未決）. Loop until `_drafts/` is empty.
+   **FB-closure invariant — every `FB:` must end the pass with a visible answer.** A `FB:` line carrying the user's text may **not** be left unchanged: by the end of the pass it is either applied (renamed `FB✓:`, text kept) or replied to (an `RE:` written beneath it). A silently-unchanged `FB:` — no `FB✓:`, no `RE:`, no tick — is the **one outcome the user cannot see**: they can't tell whether you ever read the note. So the pass is **not done** while any such note remains. This is not optional and there is no "the change was too small to mark" exception — applying a note without renaming it to `FB✓:` still leaves the user blind, so the mark IS the work.
+
+   Then run the deterministic guard (it verifies the invariant mechanically — it does not rely on you having remembered):
+   ```
+   python .claude/skills/project-wiki/scripts/draft_audit.py
+   ```
+   It lists every unanswered `FB:` (**must be 0**) and every open `RE:` awaiting the user. **If it reports any unanswered FB, you missed one** — handle it, then re-run until unanswered = 0. If the source was an inbox item and ≥1 card was finalized this pass, run `inbox-promote.py` (below).
+
+   **Closure report — paste the guard's output, then account for every note per-draft**, not just totals: for each touched draft, one line saying what happened to each note — `FB✓:`（已照做）/ `RE:`（我回問了什麼）/ finalized / 待決 — so the user sees each note's fate without opening a single file. End with **finalized X**, **revised Y**（再看一次 diff）, **still open Z**（`RE:`/未決）. Loop until `_drafts/` is empty.
 
 6. **Cross-session safety.** Because live `cards/` is touched only when a draft is finalized (ticked + clean), a parallel session (e.g. one running implementation while this one extracts) always sees the **stable, findable, approved** wiki — drafts and edit-proposals live only in `_drafts/` and never shadow a live card. The one real hazard, two sessions finalizing edits to the **same** card, is handled by the finalize branch's "re-read live, then apply, stop on mismatch".
 
