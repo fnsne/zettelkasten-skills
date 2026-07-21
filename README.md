@@ -13,6 +13,7 @@ The wiki is designed to be **read primarily by Claude** to answer your project q
 - **Reads great in Obsidian** — open the `wiki/` folder as a vault for backlinks, graph, and search; cards carry a `title:` field so the Front Matter Title plugin can show concept names (not kebab-case ids) while filenames stay ASCII
 - **Conflict tracking** — when two cards make opposing claims, mark a bidirectional conflict and surface it on audit
 - **Premise tracking for decisions** — optional `## 前提與局限` section records the assumptions a decision rests on
+- **Prose readability house-style** — a small checkable set of rules (one fact per sentence, lead with meaning and trail the refs, expand session shorthand, plain 摘要 opener) plus a zero-context readback the writer runs before staging a draft, so cards read clearly to someone who wasn't there; also surfaced on `audit` to clean up already-dense cards
 - **Health checks via script** — `audit.py` runs 8 deterministic checks (orphans, broken links, stale sources, etc.) without burning LLM tokens
 - **Semi-automatic** — every change is proposed and confirmed; nothing is silently mass-edited
 

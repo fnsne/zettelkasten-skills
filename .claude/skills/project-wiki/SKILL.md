@@ -170,6 +170,26 @@ When extracting cards, apply these rules. They make inline linking possible.
 
 > Why this rule exists: a card written to be self-contained, by a writer who doesn't feel the friction of retyping, will happily re-explain a sibling card's content inline. That is the main source of wiki-wide redundancy. The cure is the same one Zettelkasten always uses — one home per concept, everyone else links.
 
+## Prose style (readability)
+
+The *splitting* rules above decide **what** becomes a card; these decide **how the prose inside one reads**. They exist because Claude writes with the whole conversation in working memory, so it compresses — nested parentheticals, inline commit ids, session shorthand — and the result reads clearly *to the writer* and opaquely to the *reader*, who wasn't there. The reader then silently pays the cost by rewriting every card. A small, checkable house style closes that gap.
+
+**Rule P1 — One fact per sentence; no nested parentheticals.** A sentence carries one idea; a second idea starts a new sentence or bullet. Never nest a parenthetical inside a parenthetical, and don't chain clauses with 「；」/`—` until one sentence holds four facts.
+✅ 「登入成功後，auth-service 簽發一個帶 user 資訊的 JWT。access token 存活 15 分鐘,refresh 由另一張卡負責。」
+❌ 「JWT 簽發（`a1b2c3d`）：登入後 auth-service 產 token（payload 帶 user id／roles、TTL 15m,見 config）,refresh 交 auth-refresh（`d4e5f6`）,原 session 表淘汰。」
+
+**Rule P2 — Lead with the point; push refs and caveats to the end.** Open each sentence/bullet with the plain statement of what is true or what changed. Dates, commit ids, change-ids, and qualifying asides go at the *end* of the sentence — or on a trailing `落點：` / `refs:` line — never buried mid-sentence where they drown the signal. (Source *paths* already belong in `sources:` frontmatter per Rule 5; P2 is about the remaining inline noise: ids, dates, parenthetical caveats.)
+
+**Rule P3 — Write for a zero-context reader; expand every shorthand.** Assume the reader wasn't present when the card was written and holds none of your working memory. Ad-hoc code-names and "you had to be there" labels — batch names, phase numbers, internal ticket codes, private abbreviations — must be expanded into real nouns or dropped. Test: a teammate reading this cold in three weeks understands every term without asking.
+
+**Rule P4 — At most one bold per sentence/bullet.** Bold marks the single most important term. When everything is bold, nothing is.
+
+**Rule P5 — The 摘要's first sentence is the plainest thing on the card.** (Reinforces Rule 2.) The opening definition carries zero code-names, zero refs, zero parentheticals — a reader arriving via an inline link must grasp the concept from that one sentence alone.
+
+**Rule P6 — Self-readback before staging the draft.** Before writing any `[NEW]` / `[EXPAND]` draft to `_drafts/`, re-read the body once *as the zero-context reader* and rewrite every sentence that only parses with context you happen to hold. This pass is the writer's job, not the reviewer's — the user's review time should be spent catching what you *couldn't* see, not reflowing prose you could have fixed yourself.
+
+> Why these rules exist: the density gap is invisible from inside the write — the sentence that reads clearly to the writer (who knows what `N7`, `Phase-2`, or a bare commit id means) is opaque to everyone else, and only a deliberate zero-context readback catches it. Without a written prose style, the reviewer absorbs the cost by hand-smoothing every card, which is exactly the friction this section removes.
+
 ## Reading the wiki in Obsidian
 
 The wiki renders in any markdown viewer, but [Obsidian](https://obsidian.md) is the best reader — it gives backlinks, a graph view, quick-switch, and full-text search over the cards. Guidance:
@@ -329,6 +349,8 @@ Steps:
    > 弄好就回來說「go」（一個動作：有 `FB:` 的我改、已勾 OK 的寫進正式卡；沒好的留著下輪）。
 
    **Self-containment check before writing any `[NEW]` / `[EXPAND]` draft (Card splitting Rule 5).** Scan the draft body for: (a) deferral words (詳見 / 詳閱 / 參見 / 參照 / 請參考 / 見 source / 見原始檔 / "see source") used in place of explaining; (b) **any source file linked or `→`-pointed in the body** (e.g. `[…](../../src/…)` or `→ \`src/auth/jwt.ts:1-120\``). If found, **rewrite before displaying**: state the substance in the card, move the source location to the `sources:` frontmatter (provenance), and make sure every body link points card→card. Never show or write a card that defers the reader to a source or uses a source as a navigation target.
+
+   **Readability readback before writing any `[NEW]` / `[EXPAND]` draft (Prose style P1–P6).** In the same pass, re-read the body once *as a zero-context reader* and fix: sentences carrying more than one fact or nested parentheticals (P1); points buried behind inline ids/dates/caveats instead of leading with meaning and trailing the refs (P2); un-expanded session shorthand or code-names (P3); more than one bold per bullet (P4); a 摘要 opening sentence that isn't the plainest line on the card (P5). Rewrite before staging — this readback is the writer's job (P6), so the user reviews meaning, not prose density.
 
    Draft-body content by type (write this as the draft file body — the trailing question line shown in each example is the old walk-through prompt; **omit it** in the draft file):
 
@@ -496,6 +518,8 @@ Checks performed by the script:
 **Claude-side check (semantic): non-self-contained cards.** Checks 9–10 catch deferral *words* and source *links* in the body; Claude reads card bodies for the residual semantic failure neither can see — substance deferred to a source while the prose never says *what* the thing is, even with no trigger word or link (e.g. a card that gestures at "the validation logic" without describing it). Report these as rewrite candidates (Card splitting Rule 5). Fix by stating the substance in the card — directly, or by re-invoking `extract` on the card's source.
 
 **Claude-side check (semantic): duplicated substance across cards.** The opposite smell to missing-links: two or more cards that **restate the same substance** (same reasoning / steps / field list / definition) instead of one owning it and the rest linking (Card splitting Rule 6). Claude reads card bodies and reports each cluster with the duplicated block and a proposed fix — either **extract the shared concept into its own atomic card** (when its title passes the noun-phrase test and ≥2 cards need it) and replace the restatements with links, or **name one owner card** and turn the other copies into a one-sentence orienting reference + link. **Be conservative**: a one-sentence orienting reference is intended and is *not* flagged; only a repeated *paragraph / list / definition* of substance counts (mirror of the missing-links check — same scan, opposite direction). Apply via `extract` (the shared card surfaces as `[NEW]`, the de-duplication as `[EDIT]`/`[LINK]` items) or, for a one-off, a direct edit.
+
+**Claude-side check (semantic): prose readability (Prose style P1–P6).** Claude reads card bodies for the readability failures no script can see: sentences packing multiple facts or nested parentheticals (P1); points buried under inline ids/dates/caveats instead of leading with meaning (P2); un-expanded session shorthand or code-names (P3); bold on everything (P4); a 摘要 whose first sentence isn't the plainest line on the card (P5). Report each as a rewrite candidate with a proposed plainer version. **Be conservative** — a dense-but-clear sentence is fine; flag only prose a zero-context reader would have to decode or reflow. Fix via a direct edit or by re-invoking `extract` on the card's source. This is how the *already-written* dense cards get cleaned up over time, not just new drafts.
 
 `_meta/conflicts.md` is regenerated on every audit run from current frontmatter: pairs still listed in both sides' `conflicts:` are preserved (along with any human-written disagreement descriptions); pairs no longer mutually claimed are dropped.
 
