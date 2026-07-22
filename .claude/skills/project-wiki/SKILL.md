@@ -170,6 +170,13 @@ When extracting cards, apply these rules. They make inline linking possible.
 
 > Why this rule exists: a card written to be self-contained, by a writer who doesn't feel the friction of retyping, will happily re-explain a sibling card's content inline. That is the main source of wiki-wide redundancy. The cure is the same one Zettelkasten always uses — one home per concept, everyone else links.
 
+**Rule 7 — Separate the timeless from the time-bound; a volatile fact gets one home.** A card that mixes what a thing *is* (timeless: the flow, the states, the business rule, the customer decision) with whether it is *built yet* (time-bound: 已實作／未實作, commit/branch ids, current code identifiers) will start lying the moment the code moves and no one re-reads the card. Keep the two apart:
+
+- **Domain/concept cards describe the domain** — the stable substance (this is what Rule 5 wants in the card).
+- **Volatile facts get a single home and everyone else links** — the same one-home rule as Rule 6, but applied across *time* rather than across concepts. "Is X implemented? which commit?" belongs in one place (a status/progress card, or the code itself via `sources:`), never re-asserted in every card that mentions X.
+
+The more code-specifics a domain card carries inline (branch names, error codes, `file:line`, 已實作 flags), the more maintenance it silently signs up for and the more surface it has to go stale. Prefer: state the timeless domain, and for "is it built yet" either link to the single status home or leave it to the `sources:` code the reader can check. This is the *structural* prevention for the staleness that the audit's "claims stale vs. current source" check otherwise has to catch after the fact.
+
 ## Prose style (readability)
 
 The *splitting* rules above decide **what** becomes a card; these decide **how the prose inside one reads**. They exist because Claude writes with the whole conversation in working memory, so it compresses — nested parentheticals, inline commit ids, session shorthand — and the result reads clearly *to the writer* and opaquely to the *reader*, who wasn't there. The reader then silently pays the cost by rewriting every card. A small, checkable house style closes that gap.
